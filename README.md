@@ -52,6 +52,25 @@ cargo build --release
 
 ---
 
+## VWorld OpenAPI 인증키 발급
+
+이 CLI는 [VWorld](https://www.vworld.kr)(국토교통부 공간정보 오픈플랫폼)의 OpenAPI를 호출하므로 **본인 명의의 인증키**가 필요합니다. 발급은 무료입니다. 이 저장소에는 어떠한 키도 포함되어 있지 않습니다.
+
+1. **회원가입 / 로그인** — [www.vworld.kr](https://www.vworld.kr) 우상단에서 가입합니다.
+2. **인증키 신청** — 상단 메뉴 **오픈API → 인증키 신청**(활용신청)으로 이동합니다.
+3. **활용 정보 입력**
+   - 서비스(시스템) 이름: 임의로 입력 (예: `vworld-cli`)
+   - 사용 URL:
+     - **서버 / CLI 용도면 도메인 없이(무도메인) 신청** 가능 — CLI 대부분 기능은 무도메인 키로 동작합니다.
+     - 웹페이지에 임베드(생성 HTML을 특정 도메인에 게시)할 경우에만 해당 도메인을 등록합니다.
+   - 활용 API: 지오코더 / 검색 / 데이터 / WMS·WFS / 지도(2D·3D) 등 필요한 항목 체크 (전체 선택 무방)
+4. **발급** — 신청 즉시 `XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX` 형식의 인증키가 발급됩니다.
+5. 발급된 키를 아래 **키 설정**으로 등록합니다.
+
+> 도메인 등록 키를 받았다면 등록한 도메인을 `--referer`로 함께 지정해야 합니다(아래 참고). 무도메인 키는 `--referer` 없이 사용합니다.
+
+---
+
 ## 키 설정
 
 VWorld 인증키를 한 번 등록하면 이후 모든 명령에 자동 적용됩니다.
@@ -171,7 +190,27 @@ vworld map 3dsim --analysis slope --address "남산공원길 105" -o slope.html
 vworld map 3dsim --analysis sunlight --center 127.0,37.5 -o sunlight.html
 ```
 
-> 분석 결과값(경사도 분포·성토량 등)은 브라우저(Cesium/WebGL)에서만 계산됩니다. 생성된 HTML을 브라우저로 열거나, Claude Code + Playwright MCP 환경에서 자동 추출할 수 있습니다.
+> 분석 결과값(경사도 분포·성토량 등)은 브라우저(Cesium/WebGL)에서만 계산됩니다. 생성된 HTML을 브라우저로 직접 열어 확인하거나, 아래 Playwright로 수치를 자동 추출할 수 있습니다.
+
+### Playwright (선택 — 3D 분석 결과값 자동 추출)
+
+**왜 필요한가**: `geocode`·`search`·`data`·`ned`·`tile`·`staticmap`·지적도 `--dxf/--shp` 등 **CLI의 일반 기능에는 Playwright가 필요 없습니다**(REST 응답을 바로 받습니다). 다만 `map 3dsim`·2.0 가시화(히트맵·클러스터 등)가 만드는 HTML은 경사도 분포·토공량 같은 수치를 **브라우저의 Cesium/WebGL이 렌더링하면서 계산**합니다. 따라서 이 값을 **사람이 브라우저로 열지 않고 자동으로 추출**하려면 헤드리스 브라우저인 Playwright가 필요합니다.
+
+**설치** (필요한 경우에만):
+
+- **Claude Code 사용자(권장)**: Playwright MCP를 연결하면 별도 설치 없이 생성 HTML에서 결과값을 자동 추출합니다.
+- **직접 설치** — 크로미움 브라우저 엔진을 내려받습니다(macOS·Windows·Linux 공통):
+
+```bash
+# Node.js 환경
+npx playwright install chromium
+
+# 또는 Python 환경
+pip install playwright
+python -m playwright install chromium
+```
+
+> Linux 서버(헤드리스)에서는 크로미움 구동에 시스템 라이브러리가 추가로 필요할 수 있습니다: `npx playwright install-deps`(Debian/Ubuntu) 또는 배포판 패키지로 설치하세요. 결과값 자동 추출이 필요 없다면 이 단계는 건너뛰어도 됩니다.
 
 ---
 
