@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>RouteSimulation</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+
+<script src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/routeSim/routeSim_analysis_api.js"></script><!-- 운영 -->
+</head>
+
+<body>
+	<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+	<div class="col-md-2">
+	    <label style="width: 150px;">객체 타입 선택</label>
+	    <div class="form-check">
+	        <input type="radio" name="objType" class="form-check-input" id="droneObj" value="DRONE" checked>
+	        <label class="form-check-label" for="droneObj">드론</label>
+	        <input type="radio" name="objType" class="form-check-input" id="vehicleObj" value="VEHICLE">
+	        <label class="form-check-label" for="vehicleObj">차량</label>
+	    </div>
+	    <label for="cameraMode" style="width: 150px;">주행모드</label>
+	    <select class="form-control" id="cameraMode" onchange="cameraLookAt()">
+	        <option value="tpView">3인칭</option>
+	        <option value="fpView">1인칭</option>
+	    </select>
+	    <label for="cameraLookAt">카메라 고정</label>
+	    <input type="checkbox" class="form-check-input" id="cameraLookAt" onchange="cameraLookAt();">
+	
+	    <div class="col-md-2">
+	        <div class="form-group">
+	            <label for="routeElevation" style="width: 150px;">해발고도(m)</label>
+	            <input type="number" class="form-control" id="routeElevation" value="120" onchange="updateElevation(this.value)">
+	            <label for="objSpeed" style="width: 150px;">주행속도(km/h)</label>
+	            <input type="number" class="form-control" id="objSpeed" value="50" onchange="updateSpeed(this.value)">
+	        </div>
+	    </div>
+	
+	    <div class="col-md-2">
+	        <div class="form-group">
+	            <label for="objScale" style="width: 150px;">모델url</label>
+	            <input type="text" class="form-control" id="drivingSampleModel" value="https://map.vworld.kr/data/dtkmap/tool3d/routeSim/pur_drone.glb" onchange="updateTool(this.value,document.getElementById('objScale').value)">
+	            <label for="objScale" style="width: 150px;">스케일</label>
+	            <input type="number" class="form-control" id="objScale" value="1" onchange="updateScale(this.value)">
+	            <label for="objColor" style="width: 150px;">색상</label>
+	            <input type="color" class="form-control" id="objColor" value="#fff700" onchange="updateColor(this.value)">
+	        </div>
+	    </div>
+	
+	    <div class="col-md-2">
+	        <div class="form-group">
+	            <label for="droneViewAngle" style="width: 150px;">드론 카메라 각도</label>
+	            <input type="number" class="form-control" id="droneViewAngle" value="65" onchange="updateDroneViewAngle(this.value)">
+	        </div>
+	    </div>
+	
+	    <div class="col-md-2">
+	        <div class="form-group">
+	            <label style="width: 150px;">카메라뷰 변경</label>
+	            <button id="setCameraFrontView_btn" class="btn btn-secondary" onclick="setCameraView('FRONT')">앞면</button>
+	            <button id="setCameraBackView_btn" class="btn btn-secondary" onclick="setCameraView('BACK')">뒷면</button>
+	            <button id="setCameraLeftView_btn" class="btn btn-secondary" onclick="setCameraView('LEFT')">좌측</button>
+	            <button id="setCameraRightView_btn" class="btn btn-secondary" onclick="setCameraView('RIGHT')">우측</button>
+	        </div>
+	    </div>
+	    <div class="col-md-2">
+	        <div class="form-check" id="droneRouteForm">
+	            <input type="radio" name="droneRouteForm" class="form-check-input" id="droneRouteFormTube" value="tube" checked>
+	            <label class="form-check-label" for="droneRouteFormTube">원통형</label>
+	            <input type="radio" name="droneRouteForm" class="form-check-input" id="droneRouteFormLine" value="line">
+	            <label class="form-check-label" for="droneRouteFormLine">선형</label>
+	        </div>
+	    </div>
+	
+	    <div class="col-md-2">
+	        <div class="form-group">
+	            <label for="droneViewAngle" style="width: 150px;">드론 카메라 각도</label>
+	            <input type="number" class="form-control" id="droneViewAngle" value="65" onchange="updateDroneViewAngle(this.value)">
+	        </div>
+	    </div>
+	    <div class="col-md-2">
+	        <div class="form-check" id="crashEventOption">
+	            <label style="width: 150px;">충돌 활성화</label>
+	            <input type="radio" name="crashEventOption" class="form-check-input" id="crashAllow" value="true" checked>
+	            <label class="form-check-label" for="crashAllow">허용</label>
+	            <input type="radio" name="crashEventOption" class="form-check-input" id="crashIgnore" value="false">
+	            <label class="form-check-label" for="crashIgnore">무시</label>
+	        </div>
+	    </div>
+	    <div class="col-md-3" style="height: 180px; overflow-y: scroll">
+          <table class="table table-hover">
+            <thead>
+            <tr>
+              <th style="width: 60%">충돌지점</th>
+              <th style="width: 40%">위치확인</th>
+            </tr>
+            </thead>
+            <tbody id="crashPosition">
+            </tbody>
+          </table>
+        </div>
+	    
+	</div>	
+	<div class="col-md-2">
+        <div class="form-group">
+            <label for="routeGeoJSONTextarea" style="width: 150px;">경로정보 GeoJSON 입력 (EPSG:4326)</label>
+            <textarea class="form-control" id="routeGeoJSONTextarea" rows="4" ></textarea>
+        <button id="createRouteFromGeoJSON_btn" class="btn btn-success" onclick="createRouteFromGeoJSON()">경로그리기(GeoJSON)</button>           
+        </div>
+    </div>
+	<button id="createRoute_btn" class="btn btn-success" onclick="createRoute()">경로그리기</button>
+    <button id="playRouteSim_btn" class="btn btn-primary" onclick="playRouteSim()">모의주행 시작</button>
+    <button id="pauseRouteSim_btn" class="btn btn-default" onclick="pauseRouteSim()">모의주행 일시정지</button>
+    <button id="resumeRouteSim_btn" class="btn btn-default" onclick="resumeRouteSim()">모의주행 재시작</button>
+    <button id="initRouteSim_btn" class="btn btn-default" onclick="initRouteSim()">모의주행 초기화</button>
+
+    
+<script type="text/javascript">
+ function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );			
+		map.start();
+  }
+  vwmap();
+  
+let routeSimObject; // 모의주행 객체
+let crashPointEntities = []; //충돌지점
+$('#routeGeoJSONTextarea').text('{"type" : "FeatureCollection", "name" : "testname", "crs" : {"type" : "name", "properties" : {"name" : "EPSG:4326"}}, "features" : [{"type": "Feature", "geometry": {"type":"Point","coordinates":[127.13244,37.40687,46.8]}, "properties": {"lon": "127.13244", "lat": "37.40687", "ele": "46.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.13244,37.40681,47]}, "properties": {"lon": "127.13244", "lat": "37.40681", "ele": "47"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.13126,37.40625,46.4]}, "properties": {"lon": "127.13126", "lat": "37.40625", "ele": "46.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.13095,37.40607,45.9]}, "properties": {"lon": "127.13095", "lat": "37.40607", "ele": "45.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.13026,37.4056,44.4]}, "properties": {"lon": "127.13026", "lat": "37.4056", "ele": "44.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.13007,37.40549,42.4]}, "properties": {"lon": "127.13007", "lat": "37.40549", "ele": "42.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12988,37.40542,41]}, "properties": {"lon": "127.12988", "lat": "37.40542", "ele": "41"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12961,37.40539,40.4]}, "properties": {"lon": "127.12961", "lat": "37.40539", "ele": "40.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12883,37.40538,39.6]}, "properties": {"lon": "127.12883", "lat": "37.40538", "ele": "39.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12545,37.40543,38.9]}, "properties": {"lon": "127.12545", "lat": "37.40543", "ele": "38.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12548,37.40658,37.9]}, "properties": {"lon": "127.12548", "lat": "37.40658", "ele": "37.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12545,37.40726,37.1]}, "properties": {"lon": "127.12545", "lat": "37.40726", "ele": "37.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12536,37.40779,36.3]}, "properties": {"lon": "127.12536", "lat": "37.40779", "ele": "36.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12519,37.40837,35.4]}, "properties": {"lon": "127.12519", "lat": "37.40837", "ele": "35.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12514,37.40828,34.5]}, "properties": {"lon": "127.12514", "lat": "37.40828", "ele": "34.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12505,37.40817,33.7]}, "properties": {"lon": "127.12505", "lat": "37.40817", "ele": "33.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12497,37.40813,33.4]}, "properties": {"lon": "127.12497", "lat": "37.40813", "ele": "33.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12488,37.40811,33.6]}, "properties": {"lon": "127.12488", "lat": "37.40811", "ele": "33.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12487,37.40803,33.7]}, "properties": {"lon": "127.12487", "lat": "37.40803", "ele": "33.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12495,37.40783,34.1]}, "properties": {"lon": "127.12495", "lat": "37.40783", "ele": "34.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12508,37.40759,34.1]}, "properties": {"lon": "127.12508", "lat": "37.40759", "ele": "34.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12513,37.40718,34]}, "properties": {"lon": "127.12513", "lat": "37.40718", "ele": "34"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12516,37.40669,33.8]}, "properties": {"lon": "127.12516", "lat": "37.40669", "ele": "33.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12512,37.40481,33.8]}, "properties": {"lon": "127.12512", "lat": "37.40481", "ele": "33.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12508,37.4042,33.8]}, "properties": {"lon": "127.12508", "lat": "37.4042", "ele": "33.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12509,37.40165,33.8]}, "properties": {"lon": "127.12509", "lat": "37.40165", "ele": "33.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12505,37.40083,33.9]}, "properties": {"lon": "127.12505", "lat": "37.40083", "ele": "33.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12508,37.39935,34.1]}, "properties": {"lon": "127.12508", "lat": "37.39935", "ele": "34.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12506,37.39833,34.5]}, "properties": {"lon": "127.12506", "lat": "37.39833", "ele": "34.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12509,37.39712,35]}, "properties": {"lon": "127.12509", "lat": "37.39712", "ele": "35"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12505,37.39491,35.3]}, "properties": {"lon": "127.12505", "lat": "37.39491", "ele": "35.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12503,37.39464,35.2]}, "properties": {"lon": "127.12503", "lat": "37.39464", "ele": "35.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12505,37.39436,35.1]}, "properties": {"lon": "127.12505", "lat": "37.39436", "ele": "35.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12503,37.39422,35.3]}, "properties": {"lon": "127.12503", "lat": "37.39422", "ele": "35.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12489,37.39382,35.3]}, "properties": {"lon": "127.12489", "lat": "37.39382", "ele": "35.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12469,37.39343,35.9]}, "properties": {"lon": "127.12469", "lat": "37.39343", "ele": "35.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12456,37.39325,36.3]}, "properties": {"lon": "127.12456", "lat": "37.39325", "ele": "36.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1226,37.39113,36.6]}, "properties": {"lon": "127.1226", "lat": "37.39113", "ele": "36.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12167,37.39005,36.8]}, "properties": {"lon": "127.12167", "lat": "37.39005", "ele": "36.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11938,37.38757,37]}, "properties": {"lon": "127.11938", "lat": "37.38757", "ele": "37"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11766,37.38565,37.1]}, "properties": {"lon": "127.11766", "lat": "37.38565", "ele": "37.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11749,37.38533,37.3]}, "properties": {"lon": "127.11749", "lat": "37.38533", "ele": "37.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11738,37.38503,37.4]}, "properties": {"lon": "127.11738", "lat": "37.38503", "ele": "37.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11737,37.38487,37.4]}, "properties": {"lon": "127.11737", "lat": "37.38487", "ele": "37.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11749,37.38401,37.4]}, "properties": {"lon": "127.11749", "lat": "37.38401", "ele": "37.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1175,37.38388,37.7]}, "properties": {"lon": "127.1175", "lat": "37.38388", "ele": "37.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11725,37.38386,38.1]}, "properties": {"lon": "127.11725", "lat": "37.38386", "ele": "38.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11722,37.38415,38.2]}, "properties": {"lon": "127.11722", "lat": "37.38415", "ele": "38.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11718,37.38421,38.2]}, "properties": {"lon": "127.11718", "lat": "37.38421", "ele": "38.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11707,37.38423,38.4]}, "properties": {"lon": "127.11707", "lat": "37.38423", "ele": "38.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11702,37.38423,37.9]}, "properties": {"lon": "127.11702", "lat": "37.38423", "ele": "37.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11692,37.38418,37.5]}, "properties": {"lon": "127.11692", "lat": "37.38418", "ele": "37.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11636,37.38273,37.6]}, "properties": {"lon": "127.11636", "lat": "37.38273", "ele": "37.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11619,37.38234,37.7]}, "properties": {"lon": "127.11619", "lat": "37.38234", "ele": "37.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11601,37.38207,37.8]}, "properties": {"lon": "127.11601", "lat": "37.38207", "ele": "37.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11575,37.3818,37.7]}, "properties": {"lon": "127.11575", "lat": "37.3818", "ele": "37.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11057,37.37778,38.1]}, "properties": {"lon": "127.11057", "lat": "37.37778", "ele": "38.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11003,37.37722,38.5]}, "properties": {"lon": "127.11003", "lat": "37.37722", "ele": "38.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10989,37.37704,38.9]}, "properties": {"lon": "127.10989", "lat": "37.37704", "ele": "38.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10976,37.3768,39.2]}, "properties": {"lon": "127.10976", "lat": "37.3768", "ele": "39.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10963,37.37648,39.6]}, "properties": {"lon": "127.10963", "lat": "37.37648", "ele": "39.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10957,37.3763,40.1]}, "properties": {"lon": "127.10957", "lat": "37.3763", "ele": "40.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10951,37.37593,40.5]}, "properties": {"lon": "127.10951", "lat": "37.37593", "ele": "40.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10947,37.3751,40.5]}, "properties": {"lon": "127.10947", "lat": "37.3751", "ele": "40.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10949,37.37388,40.4]}, "properties": {"lon": "127.10949", "lat": "37.37388", "ele": "40.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10947,37.37314,40.9]}, "properties": {"lon": "127.10947", "lat": "37.37314", "ele": "40.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10951,37.37248,41.6]}, "properties": {"lon": "127.10951", "lat": "37.37248", "ele": "41.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10952,37.37182,42.2]}, "properties": {"lon": "127.10952", "lat": "37.37182", "ele": "42.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10949,37.37136,42.7]}, "properties": {"lon": "127.10949", "lat": "37.37136", "ele": "42.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1095,37.37085,43.4]}, "properties": {"lon": "127.1095", "lat": "37.37085", "ele": "43.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10956,37.37002,44.1]}, "properties": {"lon": "127.10956", "lat": "37.37002", "ele": "44.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10952,37.36918,44.3]}, "properties": {"lon": "127.10952", "lat": "37.36918", "ele": "44.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10953,37.36599,44.6]}, "properties": {"lon": "127.10953", "lat": "37.36599", "ele": "44.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10957,37.36363,44.7]}, "properties": {"lon": "127.10957", "lat": "37.36363", "ele": "44.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10956,37.36295,45]}, "properties": {"lon": "127.10956", "lat": "37.36295", "ele": "45"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10959,37.36219,45.3]}, "properties": {"lon": "127.10959", "lat": "37.36219", "ele": "45.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10957,37.36111,45.8]}, "properties": {"lon": "127.10957", "lat": "37.36111", "ele": "45.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10959,37.36061,46.8]}, "properties": {"lon": "127.10959", "lat": "37.36061", "ele": "46.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10956,37.35969,49.1]}, "properties": {"lon": "127.10956", "lat": "37.35969", "ele": "49.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1096,37.35916,50.1]}, "properties": {"lon": "127.1096", "lat": "37.35916", "ele": "50.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10966,37.35896,50.9]}, "properties": {"lon": "127.10966", "lat": "37.35896", "ele": "50.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10986,37.3586,51.4]}, "properties": {"lon": "127.10986", "lat": "37.3586", "ele": "51.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11018,37.35822,52.2]}, "properties": {"lon": "127.11018", "lat": "37.35822", "ele": "52.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11034,37.35816,53]}, "properties": {"lon": "127.11034", "lat": "37.35816", "ele": "53"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11057,37.35803,53.9]}, "properties": {"lon": "127.11057", "lat": "37.35803", "ele": "53.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11123,37.35759,54.8]}, "properties": {"lon": "127.11123", "lat": "37.35759", "ele": "54.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11236,37.357,55.8]}, "properties": {"lon": "127.11236", "lat": "37.357", "ele": "55.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1131,37.35663,56.8]}, "properties": {"lon": "127.1131", "lat": "37.35663", "ele": "56.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11906,37.35338,57.5]}, "properties": {"lon": "127.11906", "lat": "37.35338", "ele": "57.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11977,37.35282,58.3]}, "properties": {"lon": "127.11977", "lat": "37.35282", "ele": "58.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12003,37.35272,58.8]}, "properties": {"lon": "127.12003", "lat": "37.35272", "ele": "58.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12017,37.35269,59.1]}, "properties": {"lon": "127.12017", "lat": "37.35269", "ele": "59.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12044,37.35256,58.9]}, "properties": {"lon": "127.12044", "lat": "37.35256", "ele": "58.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12088,37.35229,58.2]}, "properties": {"lon": "127.12088", "lat": "37.35229", "ele": "58.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12105,37.35215,58.6]}, "properties": {"lon": "127.12105", "lat": "37.35215", "ele": "58.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12116,37.35186,59]}, "properties": {"lon": "127.12116", "lat": "37.35186", "ele": "59"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12122,37.35181,59.3]}, "properties": {"lon": "127.12122", "lat": "37.35181", "ele": "59.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1212,37.35174,59.5]}, "properties": {"lon": "127.1212", "lat": "37.35174", "ele": "59.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12135,37.35135,59.5]}, "properties": {"lon": "127.12135", "lat": "37.35135", "ele": "59.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12135,37.3511,59.4]}, "properties": {"lon": "127.12135", "lat": "37.3511", "ele": "59.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12148,37.35016,59.3]}, "properties": {"lon": "127.12148", "lat": "37.35016", "ele": "59.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12133,37.34948,59.2]}, "properties": {"lon": "127.12133", "lat": "37.34948", "ele": "59.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12133,37.34889,59]}, "properties": {"lon": "127.12133", "lat": "37.34889", "ele": "59"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12142,37.34758,59.1]}, "properties": {"lon": "127.12142", "lat": "37.34758", "ele": "59.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12141,37.34717,59.3]}, "properties": {"lon": "127.12141", "lat": "37.34717", "ele": "59.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12091,37.3448,59.7]}, "properties": {"lon": "127.12091", "lat": "37.3448", "ele": "59.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12055,37.3433,60.1]}, "properties": {"lon": "127.12055", "lat": "37.3433", "ele": "60.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12047,37.3431,60.3]}, "properties": {"lon": "127.12047", "lat": "37.3431", "ele": "60.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12024,37.34268,60.1]}, "properties": {"lon": "127.12024", "lat": "37.34268", "ele": "60.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.12013,37.34252,59.9]}, "properties": {"lon": "127.12013", "lat": "37.34252", "ele": "59.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11992,37.34228,59.7]}, "properties": {"lon": "127.11992", "lat": "37.34228", "ele": "59.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11964,37.34202,59.3]}, "properties": {"lon": "127.11964", "lat": "37.34202", "ele": "59.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11917,37.34168,58.9]}, "properties": {"lon": "127.11917", "lat": "37.34168", "ele": "58.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11896,37.34155,58.7]}, "properties": {"lon": "127.11896", "lat": "37.34155", "ele": "58.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11834,37.34127,58.6]}, "properties": {"lon": "127.11834", "lat": "37.34127", "ele": "58.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11526,37.34062,58.4]}, "properties": {"lon": "127.11526", "lat": "37.34062", "ele": "58.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11507,37.34056,58.3]}, "properties": {"lon": "127.11507", "lat": "37.34056", "ele": "58.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11476,37.34044,58.3]}, "properties": {"lon": "127.11476", "lat": "37.34044", "ele": "58.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11395,37.33997,58]}, "properties": {"lon": "127.11395", "lat": "37.33997", "ele": "58"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11329,37.33943,57.8]}, "properties": {"lon": "127.11329", "lat": "37.33943", "ele": "57.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11304,37.33912,57.5]}, "properties": {"lon": "127.11304", "lat": "37.33912", "ele": "57.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11287,37.33875,57.2]}, "properties": {"lon": "127.11287", "lat": "37.33875", "ele": "57.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11264,37.33773,57]}, "properties": {"lon": "127.11264", "lat": "37.33773", "ele": "57"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11263,37.33743,57]}, "properties": {"lon": "127.11263", "lat": "37.33743", "ele": "57"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11269,37.33696,56.9]}, "properties": {"lon": "127.11269", "lat": "37.33696", "ele": "56.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11342,37.33406,56.8]}, "properties": {"lon": "127.11342", "lat": "37.33406", "ele": "56.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11348,37.33342,57]}, "properties": {"lon": "127.11348", "lat": "37.33342", "ele": "57"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1135,37.33297,57]}, "properties": {"lon": "127.1135", "lat": "37.33297", "ele": "57"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11356,37.33267,57]}, "properties": {"lon": "127.11356", "lat": "37.33267", "ele": "57"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11356,37.33218,57.1]}, "properties": {"lon": "127.11356", "lat": "37.33218", "ele": "57.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11354,37.33192,57.2]}, "properties": {"lon": "127.11354", "lat": "37.33192", "ele": "57.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11356,37.33158,57.2]}, "properties": {"lon": "127.11356", "lat": "37.33158", "ele": "57.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11348,37.3313,57.3]}, "properties": {"lon": "127.11348", "lat": "37.3313", "ele": "57.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11337,37.33109,58]}, "properties": {"lon": "127.11337", "lat": "37.33109", "ele": "58"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11321,37.33086,58.6]}, "properties": {"lon": "127.11321", "lat": "37.33086", "ele": "58.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11296,37.33045,59.1]}, "properties": {"lon": "127.11296", "lat": "37.33045", "ele": "59.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11284,37.33034,59.5]}, "properties": {"lon": "127.11284", "lat": "37.33034", "ele": "59.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11271,37.33009,59.9]}, "properties": {"lon": "127.11271", "lat": "37.33009", "ele": "59.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11254,37.33015,60.2]}, "properties": {"lon": "127.11254", "lat": "37.33015", "ele": "60.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11218,37.33031,60.5]}, "properties": {"lon": "127.11218", "lat": "37.33031", "ele": "60.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11183,37.32981,60.7]}, "properties": {"lon": "127.11183", "lat": "37.32981", "ele": "60.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11101,37.32829,61.1]}, "properties": {"lon": "127.11101", "lat": "37.32829", "ele": "61.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11071,37.32731,61.5]}, "properties": {"lon": "127.11071", "lat": "37.32731", "ele": "61.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11075,37.327,61.9]}, "properties": {"lon": "127.11075", "lat": "37.327", "ele": "61.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11086,37.32678,62.3]}, "properties": {"lon": "127.11086", "lat": "37.32678", "ele": "62.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11091,37.32657,62.7]}, "properties": {"lon": "127.11091", "lat": "37.32657", "ele": "62.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11088,37.3264,63.3]}, "properties": {"lon": "127.11088", "lat": "37.3264", "ele": "63.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11105,37.32573,63.6]}, "properties": {"lon": "127.11105", "lat": "37.32573", "ele": "63.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1109,37.32478,63.6]}, "properties": {"lon": "127.1109", "lat": "37.32478", "ele": "63.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11066,37.32445,63.5]}, "properties": {"lon": "127.11066", "lat": "37.32445", "ele": "63.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.11036,37.32433,63.4]}, "properties": {"lon": "127.11036", "lat": "37.32433", "ele": "63.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10981,37.32421,63.5]}, "properties": {"lon": "127.10981", "lat": "37.32421", "ele": "63.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10855,37.32397,63.7]}, "properties": {"lon": "127.10855", "lat": "37.32397", "ele": "63.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1077,37.32378,64]}, "properties": {"lon": "127.1077", "lat": "37.32378", "ele": "64"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1071,37.32374,64.3]}, "properties": {"lon": "127.1071", "lat": "37.32374", "ele": "64.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10672,37.32376,64.8]}, "properties": {"lon": "127.10672", "lat": "37.32376", "ele": "64.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10655,37.32375,64.9]}, "properties": {"lon": "127.10655", "lat": "37.32375", "ele": "64.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10555,37.32393,65.2]}, "properties": {"lon": "127.10555", "lat": "37.32393", "ele": "65.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10529,37.32394,65.2]}, "properties": {"lon": "127.10529", "lat": "37.32394", "ele": "65.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10484,37.32391,65.3]}, "properties": {"lon": "127.10484", "lat": "37.32391", "ele": "65.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10469,37.32388,65.5]}, "properties": {"lon": "127.10469", "lat": "37.32388", "ele": "65.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10427,37.3237,65.5]}, "properties": {"lon": "127.10427", "lat": "37.3237", "ele": "65.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10398,37.32353,65.6]}, "properties": {"lon": "127.10398", "lat": "37.32353", "ele": "65.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10378,37.32336,65.9]}, "properties": {"lon": "127.10378", "lat": "37.32336", "ele": "65.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10313,37.32307,66.5]}, "properties": {"lon": "127.10313", "lat": "37.32307", "ele": "66.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10225,37.32267,67.1]}, "properties": {"lon": "127.10225", "lat": "37.32267", "ele": "67.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10201,37.32259,67.6]}, "properties": {"lon": "127.10201", "lat": "37.32259", "ele": "67.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.1018,37.32221,68.1]}, "properties": {"lon": "127.1018", "lat": "37.32221", "ele": "68.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10159,37.32205,68.6]}, "properties": {"lon": "127.10159", "lat": "37.32205", "ele": "68.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10144,37.32201,69.2]}, "properties": {"lon": "127.10144", "lat": "37.32201", "ele": "69.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.10103,37.32194,69.8]}, "properties": {"lon": "127.10103", "lat": "37.32194", "ele": "69.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09924,37.3217,70.9]}, "properties": {"lon": "127.09924", "lat": "37.3217", "ele": "70.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09885,37.32156,71.9]}, "properties": {"lon": "127.09885", "lat": "37.32156", "ele": "71.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09854,37.32141,73.1]}, "properties": {"lon": "127.09854", "lat": "37.32141", "ele": "73.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09829,37.32122,74.2]}, "properties": {"lon": "127.09829", "lat": "37.32122", "ele": "74.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09806,37.32098,75.2]}, "properties": {"lon": "127.09806", "lat": "37.32098", "ele": "75.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09795,37.32079,76.4]}, "properties": {"lon": "127.09795", "lat": "37.32079", "ele": "76.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09761,37.32041,77.7]}, "properties": {"lon": "127.09761", "lat": "37.32041", "ele": "77.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09648,37.31885,78.9]}, "properties": {"lon": "127.09648", "lat": "37.31885", "ele": "78.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09635,37.31873,79.8]}, "properties": {"lon": "127.09635", "lat": "37.31873", "ele": "79.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.0926,37.31627,80.7]}, "properties": {"lon": "127.0926", "lat": "37.31627", "ele": "80.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09231,37.31571,81.5]}, "properties": {"lon": "127.09231", "lat": "37.31571", "ele": "81.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09199,37.31506,82.2]}, "properties": {"lon": "127.09199", "lat": "37.31506", "ele": "82.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09175,37.31475,82.8]}, "properties": {"lon": "127.09175", "lat": "37.31475", "ele": "82.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09153,37.31455,83.5]}, "properties": {"lon": "127.09153", "lat": "37.31455", "ele": "83.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09134,37.31445,84]}, "properties": {"lon": "127.09134", "lat": "37.31445", "ele": "84"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09106,37.31437,84]}, "properties": {"lon": "127.09106", "lat": "37.31437", "ele": "84"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.09055,37.31431,84]}, "properties": {"lon": "127.09055", "lat": "37.31431", "ele": "84"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08987,37.31432,84]}, "properties": {"lon": "127.08987", "lat": "37.31432", "ele": "84"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.0891,37.3143,84.1]}, "properties": {"lon": "127.0891", "lat": "37.3143", "ele": "84.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08868,37.31427,84.2]}, "properties": {"lon": "127.08868", "lat": "37.31427", "ele": "84.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08847,37.31435,84]}, "properties": {"lon": "127.08847", "lat": "37.31435", "ele": "84"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08784,37.31439,83.7]}, "properties": {"lon": "127.08784", "lat": "37.31439", "ele": "83.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08697,37.31438,83.4]}, "properties": {"lon": "127.08697", "lat": "37.31438", "ele": "83.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08631,37.31433,83.1]}, "properties": {"lon": "127.08631", "lat": "37.31433", "ele": "83.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08603,37.31422,83]}, "properties": {"lon": "127.08603", "lat": "37.31422", "ele": "83"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.0855,37.31419,82.9]}, "properties": {"lon": "127.0855", "lat": "37.31419", "ele": "82.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08486,37.31401,83.1]}, "properties": {"lon": "127.08486", "lat": "37.31401", "ele": "83.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08474,37.31396,83.2]}, "properties": {"lon": "127.08474", "lat": "37.31396", "ele": "83.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08404,37.31376,83.4]}, "properties": {"lon": "127.08404", "lat": "37.31376", "ele": "83.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08339,37.3136,83.7]}, "properties": {"lon": "127.08339", "lat": "37.3136", "ele": "83.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08301,37.31356,84]}, "properties": {"lon": "127.08301", "lat": "37.31356", "ele": "84"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08288,37.31355,84.5]}, "properties": {"lon": "127.08288", "lat": "37.31355", "ele": "84.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08265,37.31356,85.4]}, "properties": {"lon": "127.08265", "lat": "37.31356", "ele": "85.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08234,37.31363,86.2]}, "properties": {"lon": "127.08234", "lat": "37.31363", "ele": "86.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08171,37.31381,86.8]}, "properties": {"lon": "127.08171", "lat": "37.31381", "ele": "86.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08146,37.31394,87.3]}, "properties": {"lon": "127.08146", "lat": "37.31394", "ele": "87.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08041,37.31428,88]}, "properties": {"lon": "127.08041", "lat": "37.31428", "ele": "88"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.0803,37.31428,88.8]}, "properties": {"lon": "127.0803", "lat": "37.31428", "ele": "88.8"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.08005,37.31438,89.7]}, "properties": {"lon": "127.08005", "lat": "37.31438", "ele": "89.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07899,37.31469,90.7]}, "properties": {"lon": "127.07899", "lat": "37.31469", "ele": "90.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07873,37.31479,91.6]}, "properties": {"lon": "127.07873", "lat": "37.31479", "ele": "91.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07853,37.31487,92.5]}, "properties": {"lon": "127.07853", "lat": "37.31487", "ele": "92.5"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07831,37.315,93.3]}, "properties": {"lon": "127.07831", "lat": "37.315", "ele": "93.3"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07819,37.31503,94.1]}, "properties": {"lon": "127.07819", "lat": "37.31503", "ele": "94.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07787,37.31509,94.6]}, "properties": {"lon": "127.07787", "lat": "37.31509", "ele": "94.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07768,37.31509,95.2]}, "properties": {"lon": "127.07768", "lat": "37.31509", "ele": "95.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07751,37.31507,96]}, "properties": {"lon": "127.07751", "lat": "37.31507", "ele": "96"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07749,37.31506,96.6]}, "properties": {"lon": "127.07749", "lat": "37.31506", "ele": "96.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07749,37.31503,96.9]}, "properties": {"lon": "127.07749", "lat": "37.31503", "ele": "96.9"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07752,37.31502,97.2]}, "properties": {"lon": "127.07752", "lat": "37.31502", "ele": "97.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07768,37.31504,97.7]}, "properties": {"lon": "127.07768", "lat": "37.31504", "ele": "97.7"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07786,37.31504,98.1]}, "properties": {"lon": "127.07786", "lat": "37.31504", "ele": "98.1"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07784,37.31505,98.2]}, "properties": {"lon": "127.07784", "lat": "37.31505", "ele": "98.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07776,37.31541,98.2]}, "properties": {"lon": "127.07776", "lat": "37.31541", "ele": "98.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.0766,37.31533,98.2]}, "properties": {"lon": "127.0766", "lat": "37.31533", "ele": "98.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07661,37.31507,98.4]}, "properties": {"lon": "127.07661", "lat": "37.31507", "ele": "98.4"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.0766,37.31496,99.2]}, "properties": {"lon": "127.0766", "lat": "37.31496", "ele": "99.2"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07649,37.31498,98]}, "properties": {"lon": "127.07649", "lat": "37.31498", "ele": "98"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07623,37.31499,97.6]}, "properties": {"lon": "127.07623", "lat": "37.31499", "ele": "97.6"}}, {"type": "Feature", "geometry": {"type":"Point","coordinates":[127.07599,37.31497,98.3]}, "properties": {"lon": "127.07599", "lat": "37.31497", "ele": "98.3"}}]}');
+//경로 그리기 수행
+  function createRoute() {
+      // 모의주행 타입 (DRONE OR VEHICLE)
+      const objType = $("input[name='objType']:checked").val();
+      // 경로 해발고도
+      const routeElevationElement = document.getElementById('routeElevation');
+      // 이미 만들어진 객체 없으면 신규 생성
+      if(!routeSimObject) {
+        routeSimObject = new RouteSimulation('routeSimObject1', 'routeSimObject1', objType);
+      } else {
+        routeSimObject.type = objType;
+      }
+      // 지도에 경로 생성 시작
+      routeSimObject.startDrawingRoute(routeElevationElement);
+  }
+
+  // GeoJSON 으로 경로 생성
+  function createRouteFromGeoJSON() {
+    // 모의주행 타입 (DRONE OR VEHICLE)
+    const objType = $("input[name='objType']:checked").val();
+    // 입력된 GeoJSON 문자열을 불러와 객체 생성
+    const routeGeoJSONStr = $('#routeGeoJSONTextarea').val();
+    let routeGeoJSONObject;
+    try {
+      routeGeoJSONObject = JSON.parse(routeGeoJSONStr);
+    } catch (e) {
+      alert('GeoJSON 형식이 아닙니다.');
+    }
+    // 이미 만들어진 객체 없으면 신규 생성
+    if(!routeSimObject) {
+      routeSimObject = new RouteSimulation('routeSimObject1', 'routeSimObject1', objType);
+    } else {
+      routeSimObject.type = objType;
+    }
+    // GeoJSON 객체로 경로 생성
+    routeSimObject.createRouteByGeoJSON(routeGeoJSONObject);
+  }
+
+  // 저장된 지점을 기반으로 모의주행 수행
+  function playRouteSim() {
+    if (routeSimObject) {
+        routeSimObject.alertEnabled = document.querySelector('input[name="crashEventOption"]:checked').value == "true";
+        $('#crashPosition').empty(); // 테이블 결과 초기화
+        // 충돌 발생시 처리 이벤트 생성
+        
+            routeSimObject.modelCrashEventCallBackFn = (position) => {
+            	if (routeSimObject.alertEnabled) {
+                // 충돌위치에 점 생성
+                var crashPoint = ws3d.viewer.entities.add({
+                    position: position,
+                    point: {
+                        pixelSize: 20,
+                        color: ws3d.common.Color.BLUE,
+                        outlineColor: ws3d.common.Color.WHITE,
+                        outlineWidth: 1,
+                        heightReference: 0,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY
+                    },
+                });
+                crashPointEntities.push(crashPoint);
+             	// ECEF -> WGS84 (위도, 경도, 고도) 변환
+                const cartographic = ws3d.common.Cartographic.fromCartesian(crashPoint.position.getValue());
+                // 위도, 경도, 고도를 얻기
+                const longitude = cartographic.longitudeDD; // 경도 (degree)
+                const latitude = cartographic.latitudeDD; // 위도 (degree)
+                const height = cartographic.height; // 고도 (미터 단위)
+                
+                /* const newDiv = document.createElement('div');
+                const newText = document.createTextNode(longitude + "<br/>" + latitude + "<br/>" + height);
+	            newDiv.appendChild(newText);  */
+	            
+	            const crashPosition = $('#crashPosition');
+	            
+	              let tr = "<tr>";
+	              tr += "<td style='width: 60%'>" + longitude + "<br/>" + latitude + "<br/>" + height + "</td>";	              
+	              tr += "<td style='width: 40%'>" + "<button onclick='selectCrashPoint(" + longitude + "," + latitude + "," + height + ")'>위치 확인</button>" + "</td>";
+	              tr += "</tr>";
+	              crashPosition.append(tr);
+	            
+                pauseRouteSim(); // 재생중지
+            }
+        }
+        const speed = 50; //Number($('#objSpeed').val());
+        const scale = 3; //Number($('#objScale').val());
+        const color = '#FFFFFF'; //$('#objColor').val();
+        const droneViewAngle = 65; //Number($('#droneViewAngle').val());
+        routeSimObject.modelUrl = $('#drivingSampleModel').val();
+
+        routeSimObject.playRouteSimulation(speed, scale, color, droneViewAngle);
+    } else {
+        alert('생성된 경로 정보가 존재하지 않습니다.');
+    }
+}
+
+  // 모의주행 객체로 카메라 고정 수행
+  function cameraLookAt() {
+    if(routeSimObject) {
+      const isChk = $('#cameraLookAt').prop('checked');
+      const type = $('#cameraMode').val();
+      routeSimObject.trackedModel(type, isChk);
+    }
+  }
+
+//모의주행 기능 재시작
+  function resumeRouteSim() {
+    if(routeSimObject) {
+      routeSimObject.resumeRouteSimulation();
+    }
+  }
+
+  // 모의주행 기능 일시정지
+  function pauseRouteSim() {
+    if(routeSimObject) {
+      routeSimObject.pauseRouteSimulation();
+    }
+  }
+
+  // 고도값 업데이트
+  function updateElevation(elevation) {
+    if(routeSimObject) {
+      routeSimObject.updateRouteElevation(Number(elevation));
+    }
+  }
+
+  // 주행속도 업데이트
+  function updateSpeed(speed) {
+    if(routeSimObject) {
+      routeSimObject.updateRouteSpeed(Number(speed));
+    }
+  }
+
+  // 스케일 값 업데이트
+  function updateScale(scale) {
+    if(routeSimObject) {
+      routeSimObject.updateModelScale(Number(scale));
+    }
+  }
+
+  // 색상 업데이트
+  function updateColor(color) {
+    if(routeSimObject) {
+      routeSimObject.updateModelColor(color);
+    }
+  }
+
+  function updateDroneViewAngle(angle) {
+    if(routeSimObject) {
+      routeSimObject.updateDroneViewAngle(angle);
+    }
+  }
+
+  // 카메라 뷰 세팅
+  function setCameraView(viewType) {
+    if(routeSimObject) {
+      let cameraHeadingOffsetValue = 0;
+      if(viewType === 'FRONT') {
+        cameraHeadingOffsetValue = 0;
+      } else if(viewType === 'BACK') {
+        cameraHeadingOffsetValue = 180;
+      } else if(viewType === 'LEFT') {
+        cameraHeadingOffsetValue = 90;
+      } else {
+        cameraHeadingOffsetValue = 270;
+      }
+      // 카메라 뷰 방향 세팅
+      routeSimObject.setCameraTrackViewHeadingOffset(cameraHeadingOffsetValue);
+    }
+  }
+
+	//기기 업데이트
+  function updateTool(tool,scale) {
+    if(routeSimObject) {
+      routeSimObject.updateModelTool(tool,scale);
+    }
+  }
+  
+  // 초기화
+  function initRouteSim() {
+    if(routeSimObject) {
+      routeSimObject.initRouteSimulation();
+      $('#crashPosition').empty();
+    }
+  }
+  //드론 라인유형(line,tube)
+  $('#droneRouteForm input[type="radio"]').change(function(){	
+      var selectValue = $(this).val();
+   	// 이미 만들어진 객체 없으면 신규 생성
+      if(routeSimObject) {
+      	routeSimObject.droneRouteForm = selectValue;
+      	routeSimObject.createDroneRouteTubeEntity();
+      } 
+  });
+   
+  //충돌 활성화여부
+  $('#crashEventOption input[type="radio"]').change(function(){	
+   	// 이미 만들어진 객체 없으면 신규 생성
+      if(routeSimObject) {
+    	  routeSimObject.alertEnabled = document.querySelector('input[name="crashEventOption"]:checked').value == "true";
+      } 
+  });
+  
+  //충돌 위치 확인 (확인용)
+  function selectCrashPoint(x,y,z) {
+    modelOriginPoint = new ws3d.common.OgcPoint(x, y, z);
+    ws3d.viewer.navigation.flyTo(modelOriginPoint, {
+        distance: 100,
+        duration: 0.5
+      });
+  }
+ 
+  </script>
+</body>
+</html>

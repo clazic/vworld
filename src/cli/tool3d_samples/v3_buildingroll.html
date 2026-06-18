@@ -1,0 +1,88 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>RollHeight</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+    <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+    <table id="ROLL_TABLE" style="display: block;">
+        <tr>
+            <td>
+            <td colspan='2'><input type='button' onclick='regRollEvent()' value='위치지정'></td>
+            <td><input type="button" onclick="rollControl('start')" value="Roll시작"></td>
+            <td><input type="button" onclick="rollControl('stop')" value="Roll정지"></td>
+        </tr>
+    </table>
+    <div id="check" style="width:100%;height:100px;left:0px;top:0px; white-space: pre-line;"></div>
+    <script>
+        var map;
+
+        var options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.96015098230917, 37.39380218106821, 1000.0),
+                new vw.Direction(0, -60, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+        map = new vw.Map();
+        map.setOption(options);
+        map.start();
+
+        var check = "1. ROLL 구현시 건물 선택 등으로 해당 높이에서 기능 수행시,<br>" +
+            "2. vw.CoordZ( x, y, z ) --> z 값이 높이에 해당함. <br/>" +
+            "3. 파라미터로 전달되는 cartograpchic 객체의 height값을 활용하여 높이를 지정할 수 있음.(cartographic.height)";
+
+
+        $("#check").html(check);
+
+        var roll;
+
+        function regRollEvent() {
+            var eventRemover = map.onClick.addEventListener(rollEvent);
+        }
+
+        // 2021-07-06. 위치지정시 건물 선택 등 고도가 필요할 경우.
+        // vw.CoordZ(X,YZ) ==> Z는 높이에 해당함.
+        // cartographic.height 를 지정하면 해당 건물의 높이값을 획득 가능함.    
+        function rollEvent(windowposition, ecefposition, cartographic, featureInfo) {
+            var loc = new vw.CoordZ(vw.Util.toDegrees(cartographic.longitude), vw.Util.toDegrees(cartographic.latitude), cartographic.height + 5);
+            rollControl('setLocation', loc);
+        }
+
+        function rollControl(flag, loc) {
+            if (flag == 'setLocation') {
+                if (roll == null) {
+                    var a = new vw.Direction(90, 00, 0);
+                    var dp = new vw.DevicePosition(loc, a);
+                    roll = new vw.cameraAction.Roll(dp);
+                    roll.setHeadingSpeed(10);
+                    roll.setTiltSpeed(5);
+                    //roll.setElevationSpeed(0.1);
+                    
+                } else {
+                    var a = new vw.Direction(90, 0, 0);
+                    var dp = new vw.DevicePosition(loc, a);
+                    roll.setPosition(dp);
+                }
+            } else if (flag == 'start') {
+                roll.start();
+                
+            } else if (flag == 'stop') {
+                roll.stop();
+                
+                roll = null;
+                map.lookat.moveTo(options.initPosition); //초기위치이동
+            }
+        }
+    </script>
+</body>
+
+</html>

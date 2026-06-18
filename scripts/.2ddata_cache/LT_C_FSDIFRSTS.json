@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_FSDIFRSTS",
+  "svc_ide": "fsdifrsts",
+  "name": "산림입지도",
+  "cat": "산림입지도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "toyanghyun",
+      "single_search": false,
+      "type": "",
+      "desc": "토양형"
+    },
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "토양형명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

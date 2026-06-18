@@ -1,0 +1,87 @@
+{
+  "data_id": "LT_L_N3A0020000",
+  "svc_ide": "n3a0020000",
+  "name": "도로중심선",
+  "cat": "도로중심선",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "ufid",
+      "single_search": false,
+      "type": "",
+      "desc": "UFID"
+    },
+    {
+      "name": "rdnu",
+      "single_search": false,
+      "type": "",
+      "desc": "도로번호"
+    },
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "rddv",
+      "single_search": false,
+      "type": "",
+      "desc": "도로구분"
+    },
+    {
+      "name": "pvqt",
+      "single_search": false,
+      "type": "",
+      "desc": "포장재질"
+    },
+    {
+      "name": "dvyn",
+      "single_search": false,
+      "type": "",
+      "desc": "분리대 유․무"
+    },
+    {
+      "name": "rdln",
+      "single_search": false,
+      "type": "",
+      "desc": "차로수"
+    },
+    {
+      "name": "rvwd",
+      "single_search": false,
+      "type": "",
+      "desc": "도로폭"
+    },
+    {
+      "name": "onsd",
+      "single_search": false,
+      "type": "",
+      "desc": "일방통행"
+    },
+    {
+      "name": "rest",
+      "single_search": false,
+      "type": "",
+      "desc": "기타"
+    },
+    {
+      "name": "rdnm",
+      "single_search": false,
+      "type": "",
+      "desc": "도로명"
+    },
+    {
+      "name": "scls",
+      "single_search": false,
+      "type": "",
+      "desc": "통합코드"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

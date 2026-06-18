@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>buildingControl</title>
+<!-- 지도 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+
+<!-- 분석 기능 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/buildingcontrol/buildingControl_api.js"></script><!-- 운영_지도-->
+
+<script crossorigin="anonymous" src="https://map.vworld.kr/js/ws3dmap/WS3DRelease3/WS3DExtension/modeler.js"></script><!-- 운영_지도 (crossorigin: cross-origin ESM 동적 import base 해결) -->
+</head>
+
+<body>
+	<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+	<button id="btnBldgPoint" class="btn btn-primary">glb 지점그린후 건물모델 회전/이동등 수행</button>
+
+<script type="text/javascript">
+ function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+  }
+  vwmap();
+  ws3de.modeler.init();
+   ////웹지엘 3.0 초기지도 초기화
+
+   buildingControl.spotmarkerS = "https://map.vworld.kr/js/dtkmap/tool3d/libapis/buildingcontrol/spotmarkerS.png";
+   buildingControl.glbFileUrl = "https://map.vworld.kr/js/dtkmap/tool3d/libapis/buildingcontrol/glbdatasample.glb";
+
+  document.addEventListener("DOMContentLoaded", function() {
+	document.querySelector('#btnBldgPoint').addEventListener("click", function() {
+		buildingControl.modelCreateSpotPoint(function() { //사용자가 모델올릴 특정 점 찍기
+			buildingControl._glbEditable = true;//glb 모델 편집 모듈 활성화
+			buildingControl.modelGlbAdd3DMap(function(){ //glbFileUrl 지도에 로딩.
+				console.log("glb로드 완료..객체 편집기 붇히기.");
+			});
+		});
+  	});
+  });
+ </script>
+</body>
+</html>

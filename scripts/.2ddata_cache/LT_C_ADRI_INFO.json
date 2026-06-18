@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_ADRI_INFO",
+  "svc_ide": "adri",
+  "name": "리",
+  "cat": "리",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "li_cd",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역코드"
+    },
+    {
+      "name": "full_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역명"
+    },
+    {
+      "name": "li_kor_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "리명"
+    },
+    {
+      "name": "li_eng_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "리 영문명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

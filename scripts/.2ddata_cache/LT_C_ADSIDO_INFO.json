@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_ADSIDO_INFO",
+  "svc_ide": "adsido",
+  "name": "광역시도",
+  "cat": "광역시도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "ctprvn_cd",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역코드"
+    },
+    {
+      "name": "ctp_kor_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "광역시도명"
+    },
+    {
+      "name": "ctp_eng_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "광역시도 영문명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "data_id": "LT_C_EADIST",
+  "svc_ide": "eadist",
+  "name": "교육행정구역",
+  "cat": "교육행정구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "objectid",
+      "single_search": false,
+      "type": "",
+      "desc": "공간객체ID"
+    },
+    {
+      "name": "office_id",
+      "single_search": false,
+      "type": "",
+      "desc": "교육행정구역일련번호"
+    },
+    {
+      "name": "office_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "교육행정구역명칭"
+    },
+    {
+      "name": "office_gb",
+      "single_search": false,
+      "type": "",
+      "desc": "교육행정구역분류"
+    },
+    {
+      "name": "edu_up_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "시도교육청코드"
+    },
+    {
+      "name": "edu_up_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시도교육청명"
+    },
+    {
+      "name": "edu_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "교육지원청코드"
+    },
+    {
+      "name": "edu_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "교육지원청명"
+    },
+    {
+      "name": "base_dt",
+      "single_search": false,
+      "type": "",
+      "desc": "데이터기준일자"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

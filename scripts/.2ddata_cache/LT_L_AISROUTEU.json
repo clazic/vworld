@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_L_AISROUTEU",
+  "svc_ide": "aisrouteu",
+  "name": "제한고도",
+  "cat": "제한고도",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "ats_lbl",
+      "single_search": false,
+      "type": "",
+      "desc": "제한고도전체라벨"
+    },
+    {
+      "name": "ats_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "제한고도라벨1"
+    },
+    {
+      "name": "ats_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "제한고도라벨2"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

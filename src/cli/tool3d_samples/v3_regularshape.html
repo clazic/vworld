@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>RegularShape,RegularShapeZ</title>
+	<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+<div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+	<input type="button" id="test" value="regularShape" onclick="vwRegularShape();">&nbsp;&nbsp;
+	<input type="button" id="test" value="regularShapeZ" onclick="vwRegularShapez();">&nbsp;&nbsp;
+	<input type="button" id="test" value="전체삭제" onclick="allClear();">&nbsp;&nbsp;
+<script>
+
+			var mapOptions = {
+				mapId: "vmap",
+				initPosition: new vw.CameraPosition(
+					new vw.CoordZ(126.61212793308475, 35.84572088628344, 23000),
+					new vw.Direction(0, -90, 0)
+				),
+				logo: true,
+				navigation: true
+			};
+
+			map = new vw.Map();
+			map.setOption(mapOptions);
+
+			map.start();
+		
+			/**
+				n각형 생성 지오메트리.
+				- 생성자 : new vw.geom.RegularShape( vw.Coord, radius , slices );
+				             vw.Coord : 중심점 좌표.
+				             radius : 중심점으로부터 반지름 meter단위
+				             slices : 꼭지점 개수.  최소 3~ 최대 128까지 가능. 
+				- 메서드
+				   1) setId( id ) : 아이디설정. 공통.
+				   2) setFillColor( vw.Color ) : Fill 색상 지정.
+				   3) setOutLineVisible( boolean ) : 외곽선 설정 여부. true : 표시, false : 미표시, D : true
+				   4) setOutLineColor( vw.Color ) : 외곽선 색상 지정.
+				   5) setLength( length ) : 지면으로부터 위의 높이. 길이.숫자형.  단위 meter
+				   6) setRadius( radius ) : 중심점으로부터 반지름.숫자형.  단위 meter
+				   7) setTopRadius( radius ) : 윗면의 반지름.숫자형. 단위 meter
+				   8) setBottomRadius( radius ) : 밑면의 반지름. 숫자형. 단위 meter
+			
+			*/
+		    function vwRegularShape()
+		    {
+		       	var coord1 = new vw.Coord(126.61212793308475,35.84572088628344);
+		       	var coord2 = new vw.Coord(126.62812793308475,35.84572088628344);
+		       	var coord3 = new vw.Coord(126.64412793308475,35.84572088628344);
+		       	
+				// 다각형 생성 파라미터. coord : 좌표값, 500 : radius반지름, 5 : 꼭지점 개수, 3~128사이의 값.
+		       	var regularshape1 = new vw.geom.RegularShape(coord1, 500, 5);
+		       	regularshape1.setId( "test01" );
+		       
+		       	regularshape1.setFillColor( new vw.Color(0,255,255, 124)  );
+		       	// 외곽선은 색상만 지정 가능하며, 선크기는 D로만 가능함.
+		       	regularshape1.setOutLineVisible( true );			// 외곽선 색상지정 유뮤. D : true, false- 지정안함.
+		       	regularshape1.setOutLineColor( vw.Color.HOTPINK );		// 외곽선 색상.
+		       	// 옵션 항목들..
+		       	regularshape1.setLength( 300 );		// 높이.. 지면으로부터 위까지의 길이. meter..
+		       	regularshape1.create();
+		       	
+		       	var regularshape2 = new vw.geom.RegularShape(coord2, 500, 7);
+		       	regularshape2.setId( "test02" );
+		       
+		       	regularshape2.setFillColor( new vw.Color(200,68,100, 124)  );
+		       	// 외곽선은 색상만 지정 가능하며, 선크기는 D로만 가능함.
+		       	regularshape2.setOutLineVisible( true );			// 외곽선 색상지정 유뮤. D : true, false- 지정안함.
+		       	regularshape2.setOutLineColor( vw.Color.RED );		// 외곽선 색상.
+		       	// 옵션 항목들..
+		       	regularshape2.setLength( 1000 );		// 높이.. 지면으로부터 위까지의 길이. meter..
+		       	// 반드시 radius가 0이 되어야 한다.
+		       	regularshape2.setRadius( 0 );			// 기둥의 반지름 설정.
+		       	regularshape2.setTopRadius( 100 );		// 윗반지름 설정.
+		       	regularshape2.setBottomRadius( 550 );		//  밑반지름 설정.
+		       
+		       	regularshape2.create();	
+		       	
+		       	var regularshape3 = new vw.geom.RegularShape(coord3, 0, 12);
+		       	regularshape3.setId( "test03" );
+		       
+		       	regularshape3.setFillColor( new vw.Color(200,200,100, 124)  );
+		       	// 외곽선은 색상만 지정 가능하며, 선크기는 D로만 가능함.
+		       	regularshape3.setOutLineVisible( false );			// 외곽선 색상지정 유뮤. D : true, false- 지정안함.
+		       	// 옵션 항목들..
+		       	regularshape3.setLength( 1500 );		// 높이.. 지면으로부터 위까지의 길이. meter..
+		       	// 반드시 radius가 0이 되어야 한다. 생성시 0이면 생략가능함.
+		       	//regularshape3.setRadius( 0 );			// 기둥의 반지름 설정.
+		       	regularshape3.setTopRadius( 400 );						// 윗반지름 설정.
+		       	regularshape3.setBottomRadius( 50 );					//  밑반지름 설정.
+		       	regularshape3.setDistanceFromTerrain(500);			// 지면으로부터 떨어진 거리.  단위 meter
+		       	regularshape3.create();			       	
+		    }			
+				   
+					/**
+					vw.geom.RegularShapeZ
+					n각형 생성 지오메트리.
+					- 생성자 : new vw.geom.RegularShape( vw.CoordZ, radius , slices );
+					             vw.CoordZ : 중심점 좌표.
+					             radius : 중심점으로부터 반지름 meter단위
+					             slices : 꼭지점 개수.  최소 3~ 최대 128까지 가능. 
+					- 메서드
+					   1) setId( id ) : 아이디설정. 공통.
+					   2) setFillColor( vw.Color ) : Fill 색상 지정.
+					   3) setOutLineVisible( boolean ) : 외곽선 설정 여부. true : 표시, false : 미표시, D : true
+					   4) setOutLineColor( vw.Color ) : 외곽선 색상 지정.
+					   5) setLength( length ) : 지면으로부터 위의 높이. 길이.숫자형.  단위 meter
+					   6) setRadius( radius ) : 중심점으로부터 반지름.숫자형.  단위 meter
+					   7) setTopRadius( radius ) : 윗면의 반지름.숫자형. 단위 meter
+					   8) setBottomRadius( radius ) : 밑면의 반지름. 숫자형. 단위 meter
+				
+				*/
+			    function vwRegularShapez()
+			    {
+			       	var coord1 = new vw.CoordZ(126.61212793308475,35.86572088628344, 1000);
+			       	var coord2 = new vw.CoordZ(126.62812793308475,35.86572088628344, 1300);
+			       	var coord3 = new vw.CoordZ(126.64412793308475,35.86572088628344, 1600);
+			       	
+					// 다각형 생성 파라미터. coord : 좌표값, 500 : radius반지름, 5 : 꼭지점 개수, 3~128사이의 값.
+			       	var regularshape1 = new vw.geom.RegularShapeZ(coord1, 500, 3);
+			       	regularshape1.setId( "testz01" );
+			       
+			       	regularshape1.setFillColor( new vw.Color(0,255,255, 124)  );
+			       	// 외곽선은 색상만 지정 가능하며, 선크기는 D로만 가능함.
+			       	regularshape1.setOutLineVisible( true );			// 외곽선 색상지정 유뮤. D : true, false- 지정안함.
+			       	regularshape1.setOutLineColor( vw.Color.HOTPINK );		// 외곽선 색상.
+			       	// 옵션 항목들..
+			       	regularshape1.setLength( 300 );		// 높이.. 지면으로부터 위까지의 길이. meter..
+			       	regularshape1.create();
+			       	
+ 	 		       	var regularshape2 = new vw.geom.RegularShapeZ(coord2, 500, 4);
+			       	regularshape2.setId( "testz02" );
+			       
+			       	regularshape2.setFillColor( new vw.Color(200,68,100, 124)  );
+			       	// 외곽선은 색상만 지정 가능하며, 선크기는 D로만 가능함.
+			       	regularshape2.setOutLineVisible( true );			// 외곽선 색상지정 유뮤. D : true, false- 지정안함.
+			       	regularshape2.setOutLineColor( vw.Color.RED );		// 외곽선 색상.
+			       	// 옵션 항목들..
+			       	regularshape2.setLength( 1000 );		// 높이.. 지면으로부터 위까지의 길이. meter..
+			       	// 반드시 radius가 0이 되어야 한다.
+			       	regularshape2.setRadius( 0 );			// 기둥의 반지름 설정.
+			       	regularshape2.setTopRadius( 100 );		// 윗반지름 설정.
+			       	regularshape2.setBottomRadius( 550 );		//  밑반지름 설정.
+			       
+			       	regularshape2.create();	
+			       	
+			       	var regularshape3 = new vw.geom.RegularShapeZ(coord3, 0, 128);
+			       	regularshape3.setId( "testz03" );
+			       
+			       	regularshape3.setFillColor( new vw.Color(200,200,100, 124)  );
+			       	// 외곽선은 색상만 지정 가능하며, 선크기는 D로만 가능함.
+			       	regularshape3.setOutLineVisible( false );			// 외곽선 색상지정 유뮤. D : true, false- 지정안함.
+			       	// 옵션 항목들..
+			       	regularshape3.setLength( 1500 );		// 높이.. 지면으로부터 위까지의 길이. meter..
+			       	// 반드시 radius가 0이 되어야 한다. 생성시 0이면 생략가능함.
+			       	//regularshape3.setRadius( 0 );			// 기둥의 반지름 설정.
+			       	regularshape3.setTopRadius( 400 );						// 윗반지름 설정.
+			       	regularshape3.setBottomRadius( 350 );					//  밑반지름 설정.
+			       
+			       	regularshape3.create();
+			    }
+				
+				function allClear() {
+					
+					if ( map != null ) {
+						map.clear();
+					}
+				}			
+
+</script>
+</body>
+</html>

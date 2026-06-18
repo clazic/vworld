@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_WGISRECOMP",
+  "svc_ide": "wgisrecomp",
+  "name": "공유수면매립준공",
+  "cat": "공유수면매립준공",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "rec_co_seq",
+      "single_search": false,
+      "type": "",
+      "desc": "일련번호"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

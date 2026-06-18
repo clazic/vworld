@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_WGISARWET",
+  "svc_ide": "wgisarwet",
+  "name": "습지보호구역",
+  "cat": "습지보호구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "bcode",
+      "single_search": false,
+      "type": "",
+      "desc": "보호구역코드"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "data_id": "LT_C_UQ111",
+  "svc_ide": "uq111",
+  "name": "도시지역",
+  "cat": "도시지역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "uname",
+      "single_search": false,
+      "type": "",
+      "desc": "용도지역명"
+    },
+    {
+      "name": "sido_name",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sigg_name",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "dyear",
+      "single_search": false,
+      "type": "",
+      "desc": "고시년도"
+    },
+    {
+      "name": "dnum",
+      "single_search": false,
+      "type": "",
+      "desc": "고시번호"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

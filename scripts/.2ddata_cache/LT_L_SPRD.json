@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_L_SPRD",
+  "svc_ide": "sprd",
+  "name": "도로명주소 도로",
+  "cat": "도로명주소",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "rn",
+      "single_search": false,
+      "type": "",
+      "desc": "도로명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

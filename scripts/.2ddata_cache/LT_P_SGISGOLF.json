@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_P_SGISGOLF",
+  "svc_ide": "sgisgolf",
+  "name": "골프장현황도",
+  "cat": "골프장현황도",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "golf_name",
+      "single_search": false,
+      "type": "",
+      "desc": "골프장명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

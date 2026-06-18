@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_C_AISCTRC",
+  "svc_ide": "aisctrc",
+  "name": "관제권",
+  "cat": "관제권",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "ctr_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "관제권라벨2"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

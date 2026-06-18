@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>SunlightSlopeConstraint</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+
+<!-- vwMap -->
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+<!-- 일조권사선제한 분석 JS 추가 -->
+<!--<script src="http://localhost:8082/js/dtkmap/tool3d/libapis/sunlightSlopeConstraint/sunlightSlopeConstraint_api.js"></script><!-- 로컬 -->
+<script src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/sunlightSlopeConstraint/sunlightSlopeConstraint_api.js"></script><!-- 운영 -->
+<script crossorigin="anonymous" src="https://map.vworld.kr/js/ws3dmap/WS3DRelease3/WS3DExtension/modeler.js"></script><!-- 운영 (crossorigin: cross-origin ESM 동적 import base 해결) -->
+
+</head>
+
+<body>
+<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+<div id="viewerContainerWrapper">
+    <div id="viewerContainer"></div>
+    <div id="subContainerToggle"><button></button></div>
+</div>
+<div id="subViewerContainer"
+     style="display: none;z-index: 9999;position: absolute;background-color: rgba(169,169,169,0.6);
+     width: 500px;height: 350px;right: 0; border: 1px solid #c0fbb0;">
+</div>
+<div id="subContainer">
+            <button id="btn_createBuildingPlot" >건축 필지 생성</button>
+            <button id="btn_drawVtBuilding" >가상건물 생성</button>
+            <button id="btn_analyzeSunlightSlope" >분석수행</button>
+            <button id="btn_initSunlightSlope" >전체삭제</button>
+</div><br><br>
+
+<div class="grid" style="height: auto;">
+	<table style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+	    <thead>
+	        <tr>
+	            <th style="width: 25%; text-align: center;">위반 여부</th>
+	            <th style="width: 25%; text-align: center;">침범 부피</th>
+	            <th style="width: 25%; text-align: center;">침범 층</th>
+	            <th style="width: 25%; text-align: center;">침범 최저높이(절대/상대)</th>
+	        </tr>
+	    </thead>
+	    <tbody>
+	    	<tr>
+	            <td style="text-align: center;" id="sunLightAnlyRsltYn"></td>
+	            <td style="text-align: center;" id="restrictionVolume"></td>
+	            <td style="text-align: center;" id="restrictionPointHeight"></td>
+	            <td style="text-align: center;" id="minRestrictionPointHeightArray"></td>
+	        </tr>
+	    </tbody>
+	</table>
+</div>
+
+<script>
+
+function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+ }
+  vwmap();
+
+  let sunlightSlopeConstraint = null;
+  ws3de.modeler.init();
+
+//필지정보 GeoJSON 으로 생성
+  document.querySelector("#btn_createBuildingPlot").addEventListener("click", function() {
+    let buildingPlotGeoJSON = '{"type":"MultiPolygon","coordinates":[[[[126.977385877,37.566971614],[126.977738212,37.566979253],[126.97836709,37.566995776],[126.978376518,37.566996319],[126.978487797,37.566990124],[126.978528037,37.566987879],[126.978548208,37.566985901],[126.978804874,37.566959813],[126.979014088,37.566943185],[126.979042759,37.56690634],[126.97905817,37.56688553],[126.979061715,37.566879584],[126.979061165,37.566861023],[126.979061559,37.566795071],[126.979062224,37.566690412],[126.979062307,37.566677402],[126.979063662,37.566464174],[126.978980485,37.566405324],[126.978982694,37.566324713],[126.978983495,37.566295692],[126.978972251,37.566274841],[126.978942571,37.566242778],[126.978922072,37.566243405],[126.978878494,37.566244748],[126.978777981,37.566247828],[126.978686558,37.566177939],[126.978556017,37.566179112],[126.978539457,37.566179262],[126.978411588,37.566180408],[126.978259881,37.566180919],[126.978234966,37.56614938],[126.97815038,37.566151255],[126.977832487,37.56615831],[126.977775632,37.56616028],[126.9775512,37.56616528],[126.977531401,37.566171493],[126.977402052,37.56630411],[126.97739292,37.566681028],[126.977385877,37.566971614]]]]}'
+    try{
+      buildingPlotGeoJSON = JSON.parse(buildingPlotGeoJSON);
+    } catch(e) {
+      alert('필지정보가 JSON 형식이 아닙니다.');
+    }
+    if(sunlightSlopeConstraint) {
+      sunlightSlopeConstraint.createBuildingPlot(buildingPlotGeoJSON);
+    } else {
+      sunlightSlopeConstraint = new SunlightSlopeConstraint('sunlightSlopeConstraint1', '일조권사선제한분석1');
+      sunlightSlopeConstraint.createBuildingPlot(buildingPlotGeoJSON);
+    }
+  });
+
+//가상건물 생성
+  document.querySelector("#btn_drawVtBuilding").addEventListener("click", function() {
+    if(sunlightSlopeConstraint) {
+      const vbOptions = {
+        name: '신축건물',
+        floorHeight: Number(3),
+        floorCount: Number(5),
+        color: '#FF00EE',
+        alpha: Number(15),
+        roofType: 'RF0002', // RF0001: 평지붕 / RF0002: 뾰족지붕
+        roofHeight: Number(5)
+      };
+      ws3d.viewer.map.getElementById('facility_build').hide();
+      sunlightSlopeConstraint.drawVirtualBuilding(vbOptions);
+    } else {
+      alert('필지 정보가 존재하지 않습니다.');
+    }
+  });
+
+//일조권사선제한 분석 수행
+  document.querySelector("#btn_analyzeSunlightSlope").addEventListener("click", function() {
+    if(sunlightSlopeConstraint) {
+      sunlightSlopeConstraint.analyzeSunlightSlopeConstraint();
+      sunlightSlopeConstraint.onAnalysisCompleteCallBackFn = (analysisResult) => {
+    	  closeLoadingWithMask();
+    	  $('#wsLoadingIndicator').css('display', 'none');
+
+          if(analysisResult) {
+                 const restrictionPointGeoJSON = analysisResult.restrictionPointGeoJSON;
+                 const sunlightTargetPointGeoJSON = analysisResult.sunlightTargetPointGeoJSON;
+                 for(let i = 0; i < restrictionPointGeoJSON.features.length; i++) {
+                   const restrictionPoint = restrictionPointGeoJSON.features[i];
+                   const restrictionPointCoordinates = restrictionPoint.geometry.coordinates;
+                   const sunlightTargetPoint = sunlightTargetPointGeoJSON.features[i];
+                   const sunlightTargetPointCoordinates = sunlightTargetPoint.geometry.coordinates;
+                 }
+                 if(restrictionPointGeoJSON.features.length){
+                    $('#sunLightAnlyRsltYn').text('위반').css({'font-weight': 'bold', 'color': 'red'});
+                 }else{
+                    $('#sunLightAnlyRsltYn').text('가능').css({'font-weight': 'bold', 'color': 'green'});
+                 }
+
+                 const restrictionPointHeightArray = [];
+                 for (const feature of analysisResult.restrictionPointGeoJSON.features) {
+                     restrictionPointHeightArray.push(feature.geometry.coordinates[2]);
+                 }
+                 for (const feature of analysisResult.restrictionFillPointGeoJSON.features) {
+                     restrictionPointHeightArray.push(feature.geometry.coordinates[2]);
+                 }
+                 if (restrictionPointHeightArray.length > 0) {
+                     console.log('제한 최소높이: ' + Math.min(...restrictionPointHeightArray) + ', 제한 최대높이: ' + Math.max(...restrictionPointHeightArray));
+                     const restrictionPointCnt = analysisResult.restrictionPointGeoJSON.features.length;
+                     const restrictionFillPointCnt = analysisResult.restrictionFillPointGeoJSON.features.length;
+                     const restrictionVolume = (restrictionPointCnt + restrictionFillPointCnt) * analysisResult.splitHeightInterval * analysisResult.splitLineInterval * analysisResult.splitLineInterval;
+                     console.log('건축 불가 영역 부피: ' + restrictionVolume + '㎥');
+                     var minFloorElevation = sunlightSlopeConstraint.virtualBuildingInfo.roofElevation - ((sunlightSlopeConstraint.virtualBuildingOptions.floorHeight * sunlightSlopeConstraint.virtualBuildingOptions.floorCount) + sunlightSlopeConstraint.virtualBuildingOptions.roofHeight);
+                     var restrictionfloor = Math.round((Math.min(...restrictionPointHeightArray) - minFloorElevation) / sunlightSlopeConstraint.virtualBuildingOptions.floorHeight);
+                     $('#restrictionVolume').text(restrictionVolume + ' ㎥');
+                     if(restrictionfloor < 1){
+                    	 $('#restrictionPointHeight').text('1 층 ↑');
+                     }else if(sunlightSlopeConstraint.virtualBuildingOptions.floorCount < restrictionfloor){
+                         $('#restrictionPointHeight').text('지붕');
+                     }else{
+                        $('#restrictionPointHeight').text(restrictionfloor + ' 층 ↑');
+                     }
+                     $('#minRestrictionPointHeightArray').text(Math.min(...restrictionPointHeightArray).toFixed(1)+' m' + ' / ' + Math.round((Math.min(...restrictionPointHeightArray) - minFloorElevation))+' m');
+                 } else {
+                     console.log('건축 불가 영역 없음');
+                     $('#restrictionVolume').text('-');
+                     $('#restrictionPointHeight').text('-');
+                     $('#restrictionfloor').text('-');
+                     $('#minRestrictionPointHeightArray').text('-');
+                 }
+
+             } else {
+               callVwAlert('분석 결과가 존재하지 않습니다.');
+             }
+      }
+    }else{
+    	alert('필지정보 및 가상건물 정보가 존재하지 않습니다.');
+    }
+  });
+
+//전체 지우기 버튼 클릭
+  document.querySelector("#btn_initSunlightSlope").addEventListener("click", function() {
+    if(sunlightSlopeConstraint) {
+      sunlightSlopeConstraint.initSunlightSlopeConstraint();
+      $('#sunLightAnlyRsltYn, #restrictionVolume, #restrictionPointHeight, #minRestrictionPointHeightArray').html('');
+    }
+  });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_P_SMALLLIBRARY",
+  "svc_ide": "smalllibrary",
+  "name": "작은도서관",
+  "cat": "작은도서관",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "lbr_name",
+      "single_search": false,
+      "type": "",
+      "desc": "작은도서관명"
+    },
+    {
+      "name": "addr",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "phne",
+      "single_search": false,
+      "type": "",
+      "desc": "전화번호"
+    },
+    {
+      "name": "category",
+      "single_search": false,
+      "type": "",
+      "desc": "분류"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "지오메트리"
+    }
+  ]
+}

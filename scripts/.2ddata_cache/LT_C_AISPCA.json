@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_AISPCA",
+  "svc_ide": "aispca",
+  "name": "비행금지구역 사전협의구역",
+  "cat": "비행금지구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "nm_kor",
+      "single_search": false,
+      "type": "",
+      "desc": "사전협의구역한글명"
+    },
+    {
+      "name": "nm_eng",
+      "single_search": false,
+      "type": "",
+      "desc": "사전협의구역영문명"
+    },
+    {
+      "name": "oper_inst",
+      "single_search": false,
+      "type": "",
+      "desc": "관리부서명"
+    },
+    {
+      "name": "telno",
+      "single_search": false,
+      "type": "",
+      "desc": "관리부서연락처"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

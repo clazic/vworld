@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_ADSIGG_INFO",
+  "svc_ide": "adsigg",
+  "name": "시군구",
+  "cat": "시군구",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "sig_cd",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역코드"
+    },
+    {
+      "name": "full_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역명"
+    },
+    {
+      "name": "sig_kor_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "sig_eng_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구 영문명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

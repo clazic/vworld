@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISDNGC",
+  "svc_ide": "aisdngc",
+  "name": "위험구역",
+  "cat": "위험구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "dng_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "위험구역라벨1"
+    },
+    {
+      "name": "dng_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "위험구역라벨2"
+    },
+    {
+      "name": "dng_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "위험구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

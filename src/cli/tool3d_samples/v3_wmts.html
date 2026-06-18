@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<title>WMTS</title>
+	<script type="text/javascript"
+			src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+<div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+<input type="button" id="test" value="WMTS" onclick="createWMTS();">&nbsp;&nbsp;
+<input type="button" id="test" value="숨기기" onclick="executeHide();">&nbsp;&nbsp;
+<input type="button" id="test" value="보이기" onclick="executeShow();">&nbsp;&nbsp;
+<input type="button" id="test" value="삭제" onclick="deleteWMTS();">&nbsp;&nbsp;
+<div id="check" style="width:100%;height:100px;left:0px;top:0px; white-space: pre-line;"></div>
+</head>
+
+<script type="text/javascript">
+
+	var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.965007,37.6, 19300),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+	var map = new vw.Map();
+	map.setOption( options );			
+	map.start();
+			
+
+	function createWMTS(){
+
+		// name : WMTS 이름명, numberOfLevelZeroTilesX : 가로타일레벨, numberOfLevelZeroTilesY : 세로타일레벨
+		// url : WMTS API URL, hasAlphaChannel : png포멧 영상 티일 투명 처리 여부, true, false,
+		// minimumLevel : 최소 지도레벨, maximumLevel : 최대 지도레벨.
+		var options = {
+			    name: "wmts01",
+			    numberOfLevelZeroTilesX : 1,
+			    numberOfLevelZeroTilesY : 1,
+			    url: "https://its.go.kr:9443/geoserver/gwc/service/wmts/rest/ntic:N_LEVEL_11/ntic:REALTIME/EPSG:3857/EPSG:3857:{z}/{y}/{x}?format=image/png",
+			    hasAlphaChannel: true,            //true => (png포맷 영상타일인 경우-투명부위 처리원할때만 true)
+			    minimumLevel: 6,
+			    maximumLevel: 19
+			}
+		
+
+		// 생성하기 전에 같은 이름이 존재하는지 확인
+		if ( map.getLayerElement("wmts01") != null ) {
+		  map.removeLayerElement("wmts01");
+		}
+
+		// 파라미터 options : wmts api 항목.
+		var wmts = new vw.source.WMTS( options );
+		//console.log("tms :" , wmts);
+		// 옵션 재설정.
+		// wmts.setParams(options);
+		// 옵션 가져오기.
+		// wmts.getParams();
+		// 재등록
+		// wmts.create();
+	}
+	
+	function executeShow() {
+		var obj = map.getLayerElement("wmts01");
+		if ( obj != null ) {
+			obj.show();
+		}
+	}
+	
+	function executeHide() {
+		var obj = map.getLayerElement("wmts01");
+		if ( obj != null ) {
+			obj.hide();
+		}
+	}
+	
+	function deleteWMTS() {
+		if ( map.getLayerElement("wmts01") != null ) {
+		  map.removeLayerElement("wmts01");
+		}
+	}
+</script>
+</body>
+
+</html>

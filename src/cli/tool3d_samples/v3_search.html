@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<!-- 
+	브이월드 API 3.0 2D 지도 검색 API 결과에 마커 생성
+ -->
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>markerPopupSearch</title>
+<script type="text/javascript"
+src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+<div id="vmap" style="width:100%;height:300px;left:0px;top:0px"></div>
+
+<!-- 지도가 그려지는 영역 조정 -->
+
+<!-- 검색 API의 파라미터를 설정하는 form 영역 -->
+ <form id="searchForm" action="#" class="form_data" onsubmit="return false;search();">
+	<input type="hidden" name="page" value="1" />
+	<input type="hidden" name="type" value="PLACE" />
+	<input type="hidden" name="request" value="search" />
+	<input type="hidden" name="apiKey" value="@{apikey}"> 
+	<input type="hidden" name="domain" value="http://map.vworld.kr"> 
+	<input type="hidden" name="crs" value="EPSG:4326" />
+	<div>
+		<input type="text"  id="searchValue" name="query" value="야탑역" style="width: 100px;" /> <a href="javascript:search();" >검색</a> 
+	</div>
+</form>
+<script type="text/javascript">
+
+	let options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.92775802528264, 37.52501881993892, 12416),
+                new vw.Direction(0, -90, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+	let map = new vw.Map();
+	map.setOption(options);
+	map.start();
+		
+	/** 검색 
+	 */
+	let search = function(){
+				
+		// jquery ajax 비동기 통신
+		$.ajax({
+			type: "get",
+			url: "https://api.vworld.kr/req/search",
+			data : $('#searchForm').serialize(),
+			dataType: 'jsonp', //cors 우회를 위해 jsonp 이용
+			async: false,
+			beforeSend:map.clear() 
+			,
+			success: function(data) {
+				if(data.response.status =="NOT_FOUND"){
+					alert("검색결과가 없습니다.");
+				}else{
+					for(let o in data.response.result.items){ 
+						let mx = data.response.result.items[o].point.x;
+						let my = data.response.result.items[o].point.y;
+						if(o==0){
+							//첫번째인자로 이동
+							move(mx,my,500);
+						}
+						pt = new vw.geom.Point(new vw.Coord(mx,my));
+						pt.setImage("https://map.vworld.kr/images/op02/map_point.png");
+						pt.setName(data.response.result.items[o].title);
+						pt.setFont("고딕");
+						pt.setId("id_"+o)
+						pt.setFontSize(14);
+						pt.set("parcel",data.response.result.items[o].address.parcel)
+						pt.set("road",data.response.result.items[o].address.road)
+					
+						pt.create();
+
+
+						// 이벤트 처리 함수이며, 파라미터로 클릭시 window 픽셀, ecef좌표, cartographic좌표(실제경위도), 객체정보를 인수로 받는다.
+						var eventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {
+							
+							//console.log("property :" , windowPosition, ecefPosition, cartographic, featureInfo);
+							if ( featureInfo != null ) {
+								// featureInfo 와 Point객체와는 다름. 
+								var id = featureInfo.groupId;
+								var pointObj = map.getObjectById( id );
+								//console.log("pointObj :" , pointObj);
+								var road = map.getObjectById(featureInfo.groupId).get("road");
+								var parcel = map.getObjectById(featureInfo.groupId).get("parcel")
+								// 텍스트문구(HTML)
+								var html = `road : ${road}n parcel : ${parcel}`;
+								
+								// 제목 title
+								var title = pointObj.getName();
+								//_id, _container, _title, _html, _width, _height, _x, _y
+								// 식별아이디, 탑재컨테이너, 제목, html, 레이어가로길이, 레이어세로길이, 클릭 이벤트X, 클릭 이벤트Y
+								pop = new vw.Popup("pop01", "vmap", title, html, 150, 100, windowPosition.x, windowPosition.y);
+								pop.create();
+							}			
+						}
+						pt.addEventListener(eventHandler);
+					}
+				}//else 종료
+			},
+			complete:function(){
+				
+
+			},
+			error: function(xhr, stat, err) {}
+		});
+	}
+	/** 이동함수 구현
+	*/
+	let move = function(x,y,z){
+	   var movePo = new vw.CoordZ(x,y,z);
+       var mPosi = new vw.CameraPosition(movePo, new vw.Direction(0,-90,0));
+       map.moveTo(mPosi);    
+	}
+
+</script>
+</body>
+</html>

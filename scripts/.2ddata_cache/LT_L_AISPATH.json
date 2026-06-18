@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_L_AISPATH",
+  "svc_ide": "aispath",
+  "name": "항공로",
+  "cat": "항공로",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "ident_txt",
+      "single_search": false,
+      "type": "",
+      "desc": "항로번호"
+    },
+    {
+      "name": "length_val",
+      "single_search": false,
+      "type": "",
+      "desc": "구간길이"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

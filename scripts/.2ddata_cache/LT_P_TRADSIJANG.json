@@ -1,0 +1,81 @@
+{
+  "data_id": "LT_P_TRADSIJANG",
+  "svc_ide": "tradsijang",
+  "name": "전통시장현황",
+  "cat": "전통시장현황",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "시장명"
+    },
+    {
+      "name": "category",
+      "single_search": false,
+      "type": "",
+      "desc": "시장유형"
+    },
+    {
+      "name": "adr_road",
+      "single_search": false,
+      "type": "",
+      "desc": "도로명주소"
+    },
+    {
+      "name": "adr_jibun",
+      "single_search": false,
+      "type": "",
+      "desc": "지번주소"
+    },
+    {
+      "name": "market",
+      "single_search": false,
+      "type": "",
+      "desc": "점포수"
+    },
+    {
+      "name": "items",
+      "single_search": false,
+      "type": "",
+      "desc": "취급품목"
+    },
+    {
+      "name": "giftcard",
+      "single_search": false,
+      "type": "",
+      "desc": "사용가능상품권"
+    },
+    {
+      "name": "toilet",
+      "single_search": false,
+      "type": "",
+      "desc": "공중화장실여부"
+    },
+    {
+      "name": "park",
+      "single_search": false,
+      "type": "",
+      "desc": "주차장여부"
+    },
+    {
+      "name": "opn_per",
+      "single_search": false,
+      "type": "",
+      "desc": "시장개설주기"
+    },
+    {
+      "name": "tel_num",
+      "single_search": false,
+      "type": "",
+      "desc": "전화번호"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

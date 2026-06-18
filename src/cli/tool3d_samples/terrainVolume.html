@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>terrainVolume</title>
+<!-- 지도 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+
+<!-- 분석 기능 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/terrainVolume/terrainVolume_analysis_api.js"></script><!-- 운영_지도-->
+<!--<script type="text/javascript" src="http://localhost:8082/js/dtkmap/tool3d/libapis/terrainVolume/terrainVolume_analysis_api.js"></script><!-- 로컬_지도-->
+</head>
+
+<body>
+	<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+	<label for="elevationP">계획고 (Elevation): </label>
+    <input type="number" id="elevationP" value="20" step="1" /><br>
+    <label for="angleP">각도 (Angle): </label>
+    <input type="number" id="angleP" value="45" step="1" /><br>
+
+	<button id="btnTerrainVolumeByPolygon" class="btn btn-primary">토공량 분석영역 그린후 분석 수행</button>
+
+	<div id = "result" style="margin-top: 20px;">
+		<h3>분석 결과:</h3>
+		    <p>평균 높이: <span id="elevationAvg">N/A</span></p>
+		    <p>계획 높이: <span id="elevation">N/A</span></p>
+		    <p>성토량: <span id="fillTerrainVolume">N/A</span></p>
+		    <p>절토량: <span id="cutTerrainVolume">N/A</span></p>
+		    <p>최고 높이: <span id="minHeight">N/A</span></p>
+		    <p>최저 높이: <span id="maxHeight">N/A</span></p>
+   </div>
+
+<script type="text/javascript">
+ function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+  }
+  vwmap();
+   ////웹지엘 3.0 초기지도 초기화
+  document.addEventListener("DOMContentLoaded", function() {
+	document.querySelector('#btnTerrainVolumeByPolygon').addEventListener("click", function() {
+		terrainVolume.startDrawingPolygon(function(callbackFn) {
+
+			if(callbackFn == 0){
+				return;
+			}
+
+
+			const elevationP = document.getElementById('elevationP').value; //계획고
+			const angleP = document.getElementById('angleP').value; //각도
+
+			// 파괴포락선 텍스처 지정
+			failureEnvelope.material =  "https://map.vworld.kr/js/dtkmap/tool3d/libapis/terrainVolume/underground.jpg";
+
+			terrainVolume.terrainVolumeAnalysis(elevationP, angleP, function(resultData) {
+				console.log("평균높이 : " + resultData.elevationAvg + " m");
+				console.log("계획높이 : " + resultData.elevation + " m");
+				console.log("성토량 : " + resultData.fillTerrainVolume + " m³");
+				console.log("절토량 : " + resultData.cutTerrainVolume + " m³");
+				console.log("최고높이 : " + resultData.minHeight + " m");
+				console.log("최저높이 : " + resultData.maxHeight + " m");
+
+				  // 화면에 결과값 출력
+		         document.getElementById("elevationAvg").innerText = resultData.elevationAvg + " m";
+		         document.getElementById("elevation").innerText = resultData.elevation + " m";
+		         document.getElementById("fillTerrainVolume").innerText = resultData.fillTerrainVolume + " m³";
+		         document.getElementById("cutTerrainVolume").innerText = resultData.cutTerrainVolume + " m³";
+		         document.getElementById("minHeight").innerText = resultData.minHeight + " m";
+		         document.getElementById("maxHeight").innerText = resultData.maxHeight + " m";
+			});
+		});
+  	});
+  });
+ </script>
+</body>
+</html>

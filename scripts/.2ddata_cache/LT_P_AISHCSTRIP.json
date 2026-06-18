@@ -1,0 +1,129 @@
+{
+  "data_id": "LT_P_AISHCSTRIP",
+  "svc_ide": "aishcstrip",
+  "name": "헬기장",
+  "cat": "헬기장",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "x",
+      "single_search": false,
+      "type": "",
+      "desc": "X좌표"
+    },
+    {
+      "name": "y",
+      "single_search": false,
+      "type": "",
+      "desc": "Y좌표"
+    },
+    {
+      "name": "long",
+      "single_search": false,
+      "type": "",
+      "desc": "경도"
+    },
+    {
+      "name": "lat",
+      "single_search": false,
+      "type": "",
+      "desc": "위도"
+    },
+    {
+      "name": "org_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "제공처"
+    },
+    {
+      "name": "str_use",
+      "single_search": false,
+      "type": "",
+      "desc": "사용여부"
+    },
+    {
+      "name": "str_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "str_adr",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "stt_cde",
+      "single_search": false,
+      "type": "",
+      "desc": "구분"
+    },
+    {
+      "name": "alt_val",
+      "single_search": false,
+      "type": "",
+      "desc": "표고"
+    },
+    {
+      "name": "int_len",
+      "single_search": false,
+      "type": "",
+      "desc": "진입구역길이"
+    },
+    {
+      "name": "int_grd",
+      "single_search": false,
+      "type": "",
+      "desc": "진입표면경사"
+    },
+    {
+      "name": "sht_grd",
+      "single_search": false,
+      "type": "",
+      "desc": "전이표면경사"
+    },
+    {
+      "name": "lnd_siz",
+      "single_search": false,
+      "type": "",
+      "desc": "착륙대"
+    },
+    {
+      "name": "pad_siz",
+      "single_search": false,
+      "type": "",
+      "desc": "패드"
+    },
+    {
+      "name": "hor_rad",
+      "single_search": false,
+      "type": "",
+      "desc": "수평표면반경"
+    },
+    {
+      "name": "com_dat",
+      "single_search": false,
+      "type": "",
+      "desc": "설치허가일"
+    },
+    {
+      "name": "use_dat",
+      "single_search": false,
+      "type": "",
+      "desc": "사용개시일"
+    },
+    {
+      "name": "use_typ",
+      "single_search": false,
+      "type": "",
+      "desc": "운용방법"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

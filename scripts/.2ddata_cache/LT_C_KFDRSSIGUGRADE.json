@@ -1,0 +1,309 @@
+{
+  "data_id": "LT_C_KFDRSSIGUGRADE",
+  "svc_ide": "kfdrssigugrade",
+  "name": "산불위험예측지도",
+  "cat": "산불위험예측지도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "ymd",
+      "single_search": false,
+      "type": "",
+      "desc": "예측년월일"
+    },
+    {
+      "name": "value00h",
+      "single_search": false,
+      "type": "",
+      "desc": "00시예측값"
+    },
+    {
+      "name": "class00h",
+      "single_search": false,
+      "type": "",
+      "desc": "00시예측등급"
+    },
+    {
+      "name": "value01h",
+      "single_search": false,
+      "type": "",
+      "desc": "1시예측값"
+    },
+    {
+      "name": "class01h",
+      "single_search": false,
+      "type": "",
+      "desc": "1시예측등급"
+    },
+    {
+      "name": "value02h",
+      "single_search": false,
+      "type": "",
+      "desc": "2시예측값"
+    },
+    {
+      "name": "class02h",
+      "single_search": false,
+      "type": "",
+      "desc": "2시예측등급"
+    },
+    {
+      "name": "value03h",
+      "single_search": false,
+      "type": "",
+      "desc": "3시예측값"
+    },
+    {
+      "name": "class03h",
+      "single_search": false,
+      "type": "",
+      "desc": "3시예측등급"
+    },
+    {
+      "name": "value04h",
+      "single_search": false,
+      "type": "",
+      "desc": "4시예측값"
+    },
+    {
+      "name": "class04h",
+      "single_search": false,
+      "type": "",
+      "desc": "4시예측등급"
+    },
+    {
+      "name": "value05h",
+      "single_search": false,
+      "type": "",
+      "desc": "5시예측값"
+    },
+    {
+      "name": "class05h",
+      "single_search": false,
+      "type": "",
+      "desc": "5시예측등급"
+    },
+    {
+      "name": "value06h",
+      "single_search": false,
+      "type": "",
+      "desc": "6시예측값"
+    },
+    {
+      "name": "class06h",
+      "single_search": false,
+      "type": "",
+      "desc": "6시예측등급"
+    },
+    {
+      "name": "value07h",
+      "single_search": false,
+      "type": "",
+      "desc": "7시예측값"
+    },
+    {
+      "name": "class07h",
+      "single_search": false,
+      "type": "",
+      "desc": "7시예측등급"
+    },
+    {
+      "name": "value08h",
+      "single_search": false,
+      "type": "",
+      "desc": "8시예측값"
+    },
+    {
+      "name": "class08h",
+      "single_search": false,
+      "type": "",
+      "desc": "8시예측등급"
+    },
+    {
+      "name": "value09h",
+      "single_search": false,
+      "type": "",
+      "desc": "9시예측값"
+    },
+    {
+      "name": "class09h",
+      "single_search": false,
+      "type": "",
+      "desc": "9시예측등급"
+    },
+    {
+      "name": "value10h",
+      "single_search": false,
+      "type": "",
+      "desc": "10시예측값"
+    },
+    {
+      "name": "class10h",
+      "single_search": false,
+      "type": "",
+      "desc": "10시예측등급"
+    },
+    {
+      "name": "value11h",
+      "single_search": false,
+      "type": "",
+      "desc": "11시예측값"
+    },
+    {
+      "name": "class11h",
+      "single_search": false,
+      "type": "",
+      "desc": "11시예측등급"
+    },
+    {
+      "name": "value12h",
+      "single_search": false,
+      "type": "",
+      "desc": "12시예측값"
+    },
+    {
+      "name": "class12h",
+      "single_search": false,
+      "type": "",
+      "desc": "12시예측등급"
+    },
+    {
+      "name": "value13h",
+      "single_search": false,
+      "type": "",
+      "desc": "13시예측값"
+    },
+    {
+      "name": "class13h",
+      "single_search": false,
+      "type": "",
+      "desc": "13시예측등급"
+    },
+    {
+      "name": "value14h",
+      "single_search": false,
+      "type": "",
+      "desc": "14시예측값"
+    },
+    {
+      "name": "class14h",
+      "single_search": false,
+      "type": "",
+      "desc": "14시예측등급"
+    },
+    {
+      "name": "value15h",
+      "single_search": false,
+      "type": "",
+      "desc": "15시예측값"
+    },
+    {
+      "name": "class15h",
+      "single_search": false,
+      "type": "",
+      "desc": "15시예측등급"
+    },
+    {
+      "name": "value16h",
+      "single_search": false,
+      "type": "",
+      "desc": "16시예측값"
+    },
+    {
+      "name": "class16h",
+      "single_search": false,
+      "type": "",
+      "desc": "16시예측등급"
+    },
+    {
+      "name": "value17h",
+      "single_search": false,
+      "type": "",
+      "desc": "17시예측값"
+    },
+    {
+      "name": "class17h",
+      "single_search": false,
+      "type": "",
+      "desc": "17시예측등급"
+    },
+    {
+      "name": "value18h",
+      "single_search": false,
+      "type": "",
+      "desc": "18시예측값"
+    },
+    {
+      "name": "class18h",
+      "single_search": false,
+      "type": "",
+      "desc": "18시예측등급"
+    },
+    {
+      "name": "value19h",
+      "single_search": false,
+      "type": "",
+      "desc": "19시예측값"
+    },
+    {
+      "name": "class19h",
+      "single_search": false,
+      "type": "",
+      "desc": "19시예측등급"
+    },
+    {
+      "name": "value20h",
+      "single_search": false,
+      "type": "",
+      "desc": "20시예측값"
+    },
+    {
+      "name": "class20h",
+      "single_search": false,
+      "type": "",
+      "desc": "20시예측등급"
+    },
+    {
+      "name": "value21h",
+      "single_search": false,
+      "type": "",
+      "desc": "21시예측값"
+    },
+    {
+      "name": "class21h",
+      "single_search": false,
+      "type": "",
+      "desc": "21시예측등급"
+    },
+    {
+      "name": "value22h",
+      "single_search": false,
+      "type": "",
+      "desc": "22시예측값"
+    },
+    {
+      "name": "class22h",
+      "single_search": false,
+      "type": "",
+      "desc": "22시예측등급"
+    },
+    {
+      "name": "value23h",
+      "single_search": false,
+      "type": "",
+      "desc": "23시예측값"
+    },
+    {
+      "name": "class23h",
+      "single_search": false,
+      "type": "",
+      "desc": "23시예측등급"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

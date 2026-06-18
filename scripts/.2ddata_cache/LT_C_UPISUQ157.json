@@ -1,0 +1,129 @@
+{
+  "data_id": "LT_C_UPISUQ157",
+  "svc_ide": "upisuq157",
+  "name": "도시계획(보건위생시설)",
+  "cat": "도시계획",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "present_sn",
+      "single_search": false,
+      "type": "",
+      "desc": "PRESENT_SN"
+    },
+    {
+      "name": "lclas_cl",
+      "single_search": false,
+      "type": "",
+      "desc": "도형 대분류코드"
+    },
+    {
+      "name": "mlsfc_cl",
+      "single_search": false,
+      "type": "",
+      "desc": "도형 중분류코드"
+    },
+    {
+      "name": "sclas_cl",
+      "single_search": false,
+      "type": "",
+      "desc": "도형 소분류코드"
+    },
+    {
+      "name": "atrb_se",
+      "single_search": false,
+      "type": "",
+      "desc": "도형 속성코드"
+    },
+    {
+      "name": "wtnnc_sn",
+      "single_search": false,
+      "type": "",
+      "desc": "조서관리 코드"
+    },
+    {
+      "name": "ntfc_sn",
+      "single_search": false,
+      "type": "",
+      "desc": "결정고시관리코드"
+    },
+    {
+      "name": "dgm_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "라벨명"
+    },
+    {
+      "name": "dgm_ar",
+      "single_search": false,
+      "type": "",
+      "desc": "면적(도형)"
+    },
+    {
+      "name": "dgm_lt",
+      "single_search": false,
+      "type": "",
+      "desc": "길이(도형)"
+    },
+    {
+      "name": "signgu_se",
+      "single_search": false,
+      "type": "",
+      "desc": "지자체관리코드"
+    },
+    {
+      "name": "excut_se",
+      "single_search": false,
+      "type": "",
+      "desc": "집행상태코드"
+    },
+    {
+      "name": "sig_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "lcl_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "도형대분류명"
+    },
+    {
+      "name": "mls_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "도형중분류명"
+    },
+    {
+      "name": "scl_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "도형소분류명"
+    },
+    {
+      "name": "atr_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "도형속성명"
+    },
+    {
+      "name": "pmi_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "도로기능명"
+    },
+    {
+      "name": "exc_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "집행상태명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

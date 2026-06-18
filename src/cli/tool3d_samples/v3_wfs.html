@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>WFSLayer</title>
+
+    <!-- 맵엔진 스타일 로딩 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+<div id="vmap" style="height:300px;left:0px;top:0px"></div>
+<input type="button" value="WFS(교통CCTV)" onclick="addWfsLayerElement()"/>&nbsp;&nbsp;
+<input type="button" value="WFS(지적도본번,부번)" onclick="wfsSample();"/>&nbsp;&nbsp;
+
+<script>
+
+    var map;
+    
+    vwmap();
+
+    function vwmap() {
+
+		var options =   {
+					mapId : "vmap",
+					initPosition: 	new vw.CameraPosition(
+							new vw.CoordZ(127.425, 38.196, 13487000),  
+							new vw.Direction(0, -90, 0)
+						),		
+					logo: true,
+					navigation: true
+				};
+
+			map = new vw.Map();
+			map.setOption( options );			
+			map.start();
+
+		}
+      
+    function addWfsLayerElement(){
+		var wfs_url = "https://2d.vworld.kr/2DCache/gis/map/WFS?Key=@{apikey}&domain=http://map.vworld.kr";
+        var params = {
+                "name": "교통CCTV",
+                "url": wfs_url, //WFS 서버
+                "typeName": "lt_p_utiscctv", //WFS레이어 명
+                "proxyUrl": "https://map.vworld.kr/proxy.do?url=", //CROS요청을 위한 proxyUrl
+                "maximumLevel" : 17,
+                "minimumLevel": 10,
+                "parameters": { //wfs 세부 파라메터
+                    "propertyname": "(ag_geom)", //응답포함 필드명 문자열리스트(gome_fld_name,label_fld)
+                    "maxfeatures": 800,                //응답 최대 레코드 수 제한
+                    "outputformat": "GML2"             //응답 포맷: GML2
+                },
+                "style" : {
+                    "heightOffset": 100,                       //지면 기준 상대고도 입력(meter)
+                    "image" : "'https://map.vworld.kr/proxy.do?url=http://map.vworld.kr/images/symbol/ico_cctv_yellow.png'"                  //이미지 url
+                }
+            };
+        
+         	var wfsLayer1 = new vw.source.WFS(wfs_url, params);
+    }
+    
+    function wfsSample() {
+		var wfs_url = "https://2d.vworld.kr/2DCache/gis/map/WFS?Key=@{apikey}&domain=http://map.vworld.kr";      	
+
+		// 지적도 부번.
+        //WfsLayerElement 인스턴스 생성
+        var params = {
+            "name": "lt_p_bunbun",
+            "url": wfs_url, //WFS 서버
+            "typeName": "lt_p_bubun", //WFS레이어 명
+            "proxyUrl": "https://map.vworld.kr/proxy.do?url=", //CROS요청을 위한 proxyUrl
+            "minimumLevel": 19,
+            "parameters": { //wfs 세부 파라메터
+                "propertyname": "(ag_geom,bubun)", //응답포함 필드명 문자열리스트(gome_fld_name,label_fld)
+                "maxfeatures": 800,                //응답 최대 레코드 수 제한
+                "outputformat": "GML2"             //응답 포맷: GML2
+            },
+            "style" : {
+                "labelText" : "'${bubun}'",               //레이블 표시할 필드명 설정
+                "labelColor": "'rgb(255,255,255)'",       //레이블 텍스트 내부 색상
+                "labelOutlineColor": "'rgb(0, 0, 0)'",    //레이블 텍스트 외곽선 색상
+                "heightOffset": 10,                       //지면 기준 상대고도 입력(meter)
+                "font": "'bold 10px 고딕,sans-serif'", //레이블 폰트
+                "image" : ""                  //이미지 url
+            }
+        };
+
+        var wfsLayer1 = new vw.source.WFS(wfs_url, params);
+        // 지적도 본번.
+        var params2 = {
+            "name": "lt_p_bonbun",
+            "url": wfs_url, //WFS 서버
+            "typeName": "lt_p_bonbun", //WFS레이어 명
+            "proxyUrl": "https://map.vworld.kr/proxy.do?url=", //CROS요청을 위한 proxyUrl
+            "minimumLevel": 19,
+            "parameters": { //wfs 세부 파라메터
+                "propertyname": "(ag_geom,bonbun)", //응답포함 필드명 문자열리스트(gome_fld_name,label_fld)
+                "maxfeatures": 800,                //응답 최대 레코드 수 제한
+                "outputformat": "GML2"             //응답 포맷: GML2
+            },
+            "style" : {
+                "labelText" : "'${bonbun}'",               //레이블 표시할 필드명 설정
+                "labelColor": "'rgb(255,255,255)'",       //레이블 텍스트 내부 색상
+                "labelOutlineColor": "'rgb(0, 0, 0)'",    //레이블 텍스트 외곽선 색상
+                "heightOffset": 10,                       //지면 기준 상대고도 입력(meter)
+                "font": "'bold 20px 고딕,sans-serif'", //레이블 폰트
+                "image" : ""                  //이미지 url
+            }
+        };
+
+        var wfsLayer2 = new vw.source.WFS(wfs_url, params2);
+    }
+    
+    
+</script>
+</body>
+</html>

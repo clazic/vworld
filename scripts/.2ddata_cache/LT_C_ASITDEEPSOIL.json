@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_ASITDEEPSOIL",
+  "svc_ide": "asitdeepsoil",
+  "name": "심토토성",
+  "cat": "심토토성",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "code_st",
+      "single_search": false,
+      "type": "",
+      "desc": "심토토성코드"
+    },
+    {
+      "name": "label",
+      "single_search": false,
+      "type": "",
+      "desc": "심토토성"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

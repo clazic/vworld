@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>VisibleArea</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+
+<script src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/visibleArea/visibleArea_analysis_api.js"></script><!-- 운영 -->
+<!--<script src="http://localhost:8082/js/dtkmap/tool3d/libapis/visibleArea/visibleArea_analysis_api.js"></script><!-- 로컬 -->
+
+<style>
+  .no-bold {
+    font-size: 14px;
+    font-weight: normal;
+    text-align: left;
+  }
+  .tr {
+    font-size: 14px;
+    font-weight: normal;
+  }
+  th {
+      text-align: left;
+  }
+</style>
+</head>
+ <body>
+<!-- tool3d/page.js가 참조하는 DOM stub (없으면 addEventListener null 에러로 클래스 적재 중단) -->
+<div id="viewerContainerWrapper" style="display:none"><div id="viewerContainer"></div></div>
+<div id="subContainerToggle" style="display:none"><button></button></div>
+<div id="subContainer" style="display:none"></div>
+<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+
+<h4>※ 분석결과라인(가시, 비가시) 색상 설정</h4>
+<label for="visibleColor">가시색상 </label>
+<input type="text" id="visibleColor"  placeholder="#FFFF33"/><br>
+<label for="invisibleColor">비가시색상 </label>
+<input type="text" id="invisibleColor"  placeholder="#FF0000"/><br><br>
+
+<label for="area">퍼짐각˚(deg) </label>
+    <input type="number" id="viewAngle" value="40" step="1" /><br>
+<label for="horizontalOffsetPrecision" style="width: 150px;">정밀도˚(deg) </label>
+   	<select class="form-control" id="horizontalOffsetPrecision">
+   	<option value="10">10˚</option>
+   	<option value="9">9˚</option>
+   	<option value="8">8˚</option>
+   	<option value="7">7˚</option>
+   	<option value="6">6˚</option>
+   	<option value="5">5˚</option>
+   	<option value="4">4˚</option>
+   	<option value="3">3˚</option>
+   	<option value="2">2˚</option>
+   	<option value="1">1˚</option>
+   	</select><br>
+
+<button id="btn_selectAnalysisPoint" class="btn btn-primary">지점선택</button><br>
+<button id="btn_analyzeVisibleArea" class="btn btn-primary">분석수행</button>
+<script type="text/javascript">
+ function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+  }
+  vwmap();
+
+let visibleArea; // 가시면적 분석 객체
+
+//지점선택 버튼 클릭
+  document.querySelector("#btn_selectAnalysisPoint").addEventListener("click", function() {
+    const viewAngle = parseInt(document.getElementById("viewAngle").value); // 퍼짐각
+    const horizontalOffsetPrecision = parseInt(document.getElementById("horizontalOffsetPrecision").value); // 횡간격 정밀도
+    const visibleColor = "#FFFF33"; // 가시화색상
+    const invisibleColor = "#FF0000"; // 비가시화색상
+    if(!visibleArea) {
+      visibleArea = new VisibleArea('visibleArea1', 'visibleArea1', {
+        maxFarValue: 300, // 분석 최대 거리 설정
+        maxViewAngle: 60, // 최대 퍼짐각 제한
+        analyzedLineOptions: { // 분석결과 라인 옵션 설정
+          lineWidth: 2, // 라인 굵기
+          lineAlpha: 0.8, // 라인 색상 알파값
+          visibleColor: visibleColor, // 가시 라인 색상 (기본값)
+          invisibleColor: invisibleColor // 비가시 라인 색상 (기본값)
+        }
+      });
+      visibleArea.selectAnalysisPoint(viewAngle, horizontalOffsetPrecision, visibleColor, invisibleColor);
+    } else {
+      visibleArea.selectAnalysisPoint(viewAngle, horizontalOffsetPrecision, visibleColor, invisibleColor);
+    }
+    // 이전결과 제거
+    $('#totalArea').html(0.0);
+    $('#visibleArea').html(0.0);
+  });
+
+  // 가시면적 분석 버튼 클릭
+  document.querySelector("#btn_analyzeVisibleArea").addEventListener("click", function() {
+    if(visibleArea) {
+	  $('#wsLoadingIndicator').css('display', 'block');
+	  loadingWithMask();
+
+      const visibleColor = document.getElementById("visibleColor").value; // 가시화색상
+      const invisibleColor = document.getElementById("invisibleColor").value; // 비가시화색상
+      const verticalOffsetPrecision = 5; // 종간격 정밀도
+
+      // 가시면적 분석 수행 (가시색상, 비가시색상 옵션)
+      visibleArea.analyzeVisibleArea(
+        verticalOffsetPrecision,
+        visibleColor,
+        invisibleColor,
+        (totalArea, visibleArea) => { // 분석 완료 콜백 함수
+          $('#wsLoadingIndicator').css('display', 'none');
+          closeLoadingWithMask();
+          $('#totalArea').html(totalArea.toFixed(2) + "㎡");
+          $('#visibleArea').html(visibleArea.toFixed(2) + "㎡");
+        }
+      );
+
+    } else {
+      alert('가시면적 분석 지점이 존재하지 않습니다.');
+    }
+  });
+
+  //유효값 : 퍼짐각
+  var regex = /^-?(?:\d+|\d)(?:\.\d+)?$/; // 소수점 허용
+
+  $("#viewAngle").on("focusout keyup", function(){
+		var v = $(this).val();
+		if(v.length > 0){
+			if(v < 1 || v > 40 || regex.test(v) == false){
+				alert('1~40 사이의 값을 입력하세요.','',function(){});
+				v = "";
+			}
+			$(this).val(v);
+			setTimeout(function(){$(this).focus();},1);
+		}
+	});
+
+ </script>
+
+ <div class="grid" style="height: auto; display: inline-block; margin-left: 20px;">
+		<table>
+			<tbody>
+				<tr>
+					<th class="no-bold">총면적 :</th>
+					<td class="tr" id="totalArea">0000㎡</td>
+				</tr>
+				<tr>
+					<th class="no-bold">가시면적 :</th>
+					<td class="tr" id="visibleArea">0000㎡</td>
+				</tr>
+			</tbody>
+		</table>
+</div>
+</body>
+</html>

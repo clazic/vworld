@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<!-- 
+	브이월드 WebGL API 2.0 마커 샘플
+ -->
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GroupMarker</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+    <div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+    <input type="button" onclick="setPoint()" value="마커그룹생성">
+    <input type="button" onclick="hideGroup()" value="마커그룹숨김">
+    <input type="button" onclick="showGroup()" value="마커그룹표시">
+    <input type="button" onclick="getObject()" value="마커객체찾기">
+    <input type="button" onclick="redraw2()" value="마커수정">
+
+    <div id="check" style="width:100%;height:100px;left:0px;top:0px; white-space: pre-line;"></div>
+
+    <script type="text/javascript">
+        var options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.941883, 37.524370, 7400),
+                new vw.Direction(0, -90, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+        var map = new vw.Map();
+        map.setOption(options);
+        map.start();
+
+        var pop;
+        var pointGroup;
+
+        function setPoint() {
+
+            pointGroup = new vw.geom.ShapeGroups("testgroups");
+            // 1. 이미지 일괄지정.
+            pointGroup.setImage("https://map.vworld.kr/images/v2map/spotmarker.png");
+
+            var point1Coord = new vw.Coord(126.921883, 37.524370);
+            var pt1 = new vw.geom.Point(point1Coord);
+
+            pt1.setId("test1");
+            pt1.setName("2차원 포인트1 ");
+            pt1.setFont("고딕");
+            pt1.setFontSize(5);
+
+
+            var point2Coord = new vw.Coord(126.931883, 37.524370);
+            var pt2 = new vw.geom.Point(point2Coord);
+            pt2.setId("test2");
+            pt2.setName("2차원 포인트2 ");
+            pt2.setFont("고딕");
+            pt2.setFontSize(15);
+            pt2.create();
+
+            var point3Coord = new vw.Coord(126.941883, 37.524370);
+            var pt3 = new vw.geom.Point(point3Coord);
+            pt3.setId("test3");
+            pt3.setName("2차원 포인트3 ");
+            pt3.setFont("고딕");
+            pt3.setFontSize(35);
+            pt3.create();
+
+            var point4Coord = new vw.Coord(126.961883, 37.524370);
+            var pt4 = new vw.geom.Point(point4Coord);
+            pt4.setId("test4");
+            pt4.setName("2차원 포인트4 ");
+            pt4.setFont("고딕");
+            pt4.setFontSize(55);
+            pt4.create();
+
+            var point5Coord = new vw.Coord(126.961883, 37.515370);
+            var pt5 = new vw.geom.Point(point5Coord);
+            pt5.setId("test5");
+            pt5.setName("2차원 포인트5 ");
+            pt5.setFont("고딕");
+            pt5.setFontSize(95);
+            pt5.create();
+
+            // 이벤트 처리 함수이며, 파라미터로 클릭시 window 픽셀, ecef좌표, cartographic좌표(실제경위도), 객체정보를 인수로 받는다.
+            var eventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {
+
+                //console.log("property :" , windowPosition, ecefPosition, cartographic, featureInfo);
+                if (featureInfo != null) {
+                    // featureInfo 와 Point객체와는 다름. 
+                    // Point 객체를 가져올 경우 featureInfo.groupId로 가져옴.(그룹별 아이디라기 보다는 개별아이디.)
+                    var id = featureInfo.groupId;
+                    var pointObj = map.getObjectById(id);
+                    //console.log("pointObj :" , pointObj);
+
+                    // 텍스트문구(HTML)
+                    var html = '동해물과 백두산이 마르고 닳도록 하느님이 보우하사 우리나라만세<br>';
+                    html += '무궁화 삼천리 화려강산 대한사람 대한으로 길이 보전하세~~';
+
+                    // 제목 title
+                    var title = pointObj.getName();
+                    //_id, _container, _title, _html, _width, _height, _x, _y
+                    // 식별아이디, 탑재컨테이너, 제목, html, 레이어가로길이, 레이어세로길이, 클릭 이벤트X, 클릭 이벤트Y
+                    pop = new vw.Popup("pop01", "vmap", title, html, 450, 300, windowPosition.x, windowPosition.y);
+                    pop.create();
+                }
+            }
+            /* pt1.addEventListener(eventHandler);
+            pt2.addEventListener(eventHandler);
+            pt3.addEventListener(eventHandler);
+            pt4.addEventListener(eventHandler);
+            pt5.addEventListener(eventHandler); */
+
+            pointGroup.addEventListener(eventHandler);
+
+            pointGroup.add(pt1);
+            pointGroup.add(pt2);
+            pointGroup.add(pt3);
+            pointGroup.add(pt4);
+            pointGroup.add(pt5);
+
+            pointGroup.show();
+        }
+
+        // 일괄 마커 숨김
+        function hideGroup() {
+            pointGroup.hide();
+        }
+
+        // 일괄마커 표시
+        function showGroup() {
+            pointGroup.show();
+        }
+
+        function getObject() {
+            var obj = pointGroup.getById("test2");
+            console.log("obj : ", obj);
+            obj.redraw();
+        }
+
+        // 마커 이벤트 제거방법.
+        function removeEvent() {
+            var _obj = map.getObjectById("test1");
+            if (_obj != null) {
+                _obj.removeEventListener();
+            }
+        }
+
+        // 마커 문구 수정 및 기타 수정.
+        function redraw() {
+            // 아이디로 객체를 찾는다.
+            // 모든 그래픽 객체는 redraw() 메서드가 구현되어 있습니다.
+            //test4
+            var pt4 = map.getObjectById("test4");
+            //console.log("pt4 :" , pt4);
+            if (pt4 != null) {
+                var point4Coord = new vw.Coord(126.971883, 37.527370);
+
+                pt4.setCoord(point4Coord);
+                //pt4.setImage("http://localhost:8082/images/v2map/spotmarker.png");
+                pt4.setName("2차원 포인트4");
+                pt4.setFont("궁서");
+                pt4.setFontSize(25);
+                pt4.redraw();
+            }
+        }
+
+        function redraw2() {
+            var pt3 = map.getObjectById("test3");
+            if (pt3 != null) {
+                var point3Coord = new vw.Coord(126.945883, 37.524370);
+
+                pt3.setName("2차원 포인트3-1");
+                pt3.setFont("나눔고딕");
+                pt3.setFontSize(15);
+                pt3.redraw();
+            }
+        }
+
+        /**
+         vw.geom.ShapeGroups 메서드
+         contructor : new vw.geom.ShapeGroups(아이디);  식별자
+         setId(_id) : ShapeGroups id설정
+         getId() : ShapeGroups id 반환
+         setOption(_opt) : ShapeGroups 일괄 옵션 설정.  Polyline, MutilPolyline, Polygon, MultiPolygon 등.
+         getOption() : ShapeGroups 옵션 반환.
+         addEventListener(evtListener) : ShapeGroups 일괄 이벤트리스너 설정		
+         removeEventListener() : ShapeGroups 일괄 이벤트리스너 삭제			
+         setImage( _image ) :  ShapeGroups 일괄 이미지 설정
+         getImage() : ShapeGroups 일괄 이미지 반환		
+         add( _item ) : 도형객체 추가.	    
+         getById( _id ) : 아이디로 도형객체 반환
+         removeById(_id) : 아이디로 도형객체 삭제	    
+         removeByObj(_obj) : 객체로 도형객체 삭제.
+         show() : 도형 일괄 출력.
+         showById(_id) : 아이디로 도형 검색 후 출력.
+         hide() : 도형 일괄 숨김
+         hideById(_id) : 아이디로 도형 검색 후 숨김.
+        */
+    </script>
+</body>
+
+</html>

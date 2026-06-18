@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_WKMSTRM",
+  "svc_ide": "wkmstrm",
+  "name": "하천망",
+  "cat": "하천망",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "riv_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "하천명"
+    },
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "하천분류"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

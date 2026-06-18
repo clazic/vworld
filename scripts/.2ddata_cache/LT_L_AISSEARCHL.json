@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_L_AISSEARCHL",
+  "svc_ide": "aissearchl",
+  "name": "수색비행장비행구역",
+  "cat": "수색비행장비행구역",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "nm",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

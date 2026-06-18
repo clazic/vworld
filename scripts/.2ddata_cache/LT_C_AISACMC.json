@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISACMC",
+  "svc_ide": "aisacmc",
+  "name": "공중전투기동훈련장",
+  "cat": "공중전투기동훈련장",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "acm_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "공중전투기동훈련장라벨1"
+    },
+    {
+      "name": "acm_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "공중전투기동훈련장라벨2"
+    },
+    {
+      "name": "acm_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "공중전투기동훈련장라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

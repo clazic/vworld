@@ -1,0 +1,45 @@
+{
+  "data_id": "LT_P_MGPRTFD",
+  "svc_ide": "mgprtfd",
+  "name": "기타보호시설",
+  "cat": "기타보호시설",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시설분류명"
+    },
+    {
+      "name": "fac_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시설명"
+    },
+    {
+      "name": "fac_tel",
+      "single_search": false,
+      "type": "",
+      "desc": "시설전화번호"
+    },
+    {
+      "name": "fac_o_add",
+      "single_search": false,
+      "type": "",
+      "desc": "시설구주소"
+    },
+    {
+      "name": "fac_n_add",
+      "single_search": false,
+      "type": "",
+      "desc": "시설새주소"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

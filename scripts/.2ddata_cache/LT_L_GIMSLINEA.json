@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_L_GIMSLINEA",
+  "svc_ide": "lgimslinea",
+  "name": "지질구조선",
+  "cat": "지질구조선",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "regn_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "지역코드"
+    },
+    {
+      "name": "sig_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

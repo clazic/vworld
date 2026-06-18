@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_AISFLDC",
+  "svc_ide": "aisfldc",
+  "name": "경량항공기이착륙장",
+  "cat": "경량항공기이착륙장",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "fld_label",
+      "single_search": false,
+      "type": "",
+      "desc": "이착륙장전체라벨"
+    },
+    {
+      "name": "fld_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "이착륙장라벨1"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>profileTerrain</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+<script src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/profileTerrain/profileTerrain_analysis_api.js"></script>
+<!-- <script src="http://192.168.90.49:9002/js/dtkmap/tool3d/libapis/profileTerrain/profileTerrain_analysis_api.js"></script> -->
+</head>
+
+<body>
+	<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+	<button id="btn_freeSection" type="button" class="btn btn-primary">자유선택</button>
+	<button id="btn_createCrossSectionPlot" type="button" class="btn btn-primary">필지선택</button><br>
+	<label for="crossIntervalDistance" id="crossIntervalDistanceNm" style="font-size: 12px;" class="hide">횡단 간격 설정 (미터)</label>
+	<input type="number" class="form-control hide" id="crossIntervalDistance" value="10" style="width: 50px;"><br>
+	<button id="btnSampleTerrainByLine" type="button" class="btn btn-primary" disabled>종단면 그리기</button><br>
+	<button id="actIntervalSet1" type="button" class="btn btn-primary hide">지점선택</button>
+    <button id="actIntervalSet2" type="button" class="btn btn-primary hide">등간격설정</button><br>
+    <label for="crossDistance" id="crossDistanceNm" style="font-size: 12px;" class="hide">횡단 길이(미터)</label>
+	<input type="number" class="form-control hide" id="crossDistance" value="50" style="width: 50px;">
+	<label for="crossInterval" id="crossIntervalNm" style="font-size: 12px;" class="hide">횡단 간격(미터)</label>
+	<input type="number" class="form-control hide" id="crossInterval" value="50" style="width: 50px;"><br>
+	<button id="btnSampleTerrainByCrossLine" type="button" class="btn btn-primary hide">횡단 지점 선택</button><br>
+	<button id="btnCrossPointInterval" type="button" class="btn btn-primary hide">횡단지점(등간격)</button><br>
+    <button id="btnAnalysis" type="button" class="btn btn-primary">분석 실행</button>
+    <button id="btnInit" type="button" class="btn btn-primary">초기화</button>
+
+    <!-- 0207 -->
+    <div class="content" id="tableResult" style="height: 195px;"></div>
+
+<script type="text/javascript">
+ function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+  }
+  vwmap();
+
+
+  let selectMode;
+  let crossSection; // 지번선택모드
+
+  profileTerrain.intervalValue = '1';
+//선분으로 지면고도 샘플링 (종단면)
+  document.querySelector('#btnSampleTerrainByLine').addEventListener("click", function() {
+
+   	if(selectMode == 'freeSelectMode'){
+   	    profileTerrain.initProfileAnalysis(); // 이전 분석결과 초기화
+   		profileTerrain.startMarker = "https://map.vworld.kr/js/dtkmap/tool3d/libapis/profileTerrain/ico_location_red.svg";
+   		profileTerrain.endMarker = "https://map.vworld.kr/js/dtkmap/tool3d/libapis/profileTerrain/ico_location_blue.svg";
+   	    profileTerrain.startDrawingPolyline();
+
+   	}else{ //jibunSelectMode
+   		const crossIntervalDistance = Number($('#crossIntervalDistance').val()); // 황단지점 분할 거리 설정
+   	    if(crossSection) {
+   	      // 단면분석에서 추출할 객체 (표면 샘플링 시 제외할 객체)
+   	      const objectsToExclude = [];
+   	      // 건축인허가 가상건물 Primitive 배열
+   	      const bldgObjectArray = ws3d.viewer.scene.primitives._primitives.filter(
+   	        primitive=>primitive.objectTransformOwner && primitive.objectTransformOwner.typeName === 'BldgObject'
+   	      )
+   	      objectsToExclude.push(...bldgObjectArray);
+   	      // 단면 분석 옵션
+   	      const crossSectionOptions = {
+   	        crossIntervalDistance: crossIntervalDistance,
+   	        objectsToExclude: objectsToExclude
+   	      }
+   	      // 단면도 대상 지점 옵션
+   	      const crossSectionObjectOptions = {
+   	        longLineWidth: 4,
+   	        longLineColor: '#FF3257',
+   	        crossPointSize: 12,
+   	        crossPointColor: '#fffc00',
+   	        crossLineColor: '#FF3257',
+   	        crossLineWidth: 4, // 횡단면 라인 굵기
+   	        drawCrossLine: true, // 횡단면 분석지점 그리기
+   	        fontSize: 15
+   	      }
+   	      crossSection.startDrawingCrossSectionPosition(crossSectionOptions, crossSectionObjectOptions, () => {
+   	        // 그리기 종료
+   	      });
+   	    } else {
+   	      alert('분석 대상 필지가 존재하지 않습니다.')
+   	    }
+   	}
+   });
+
+  // 횡단 지점 선택 버튼 클릭
+  document.querySelector("#btnSampleTerrainByCrossLine").addEventListener("click", function() {
+
+	let crossDistance = Number($('#crossDistance').val());
+	profileTerrain.spotMarker = "https://map.vworld.kr/js/dtkmap/tool3d/libapis/profileTerrain/spotmarker.png";
+	profileTerrain.startDrawingCrossPoint(crossDistance);
+
+  });
+
+  //횡단지점(등간격) 버튼 클릭
+  document.querySelector("#btnCrossPointInterval").addEventListener("click", function() {
+	let crossIntervalValue = Number($('#crossInterval').val());
+	let crossDistance = Number($('#crossDistance').val());
+	profileTerrain.spotMarker = "https://map.vworld.kr/js/dtkmap/tool3d/libapis/profileTerrain/spotmarker.png";
+	profileTerrain.startDrawingCrossLine(crossIntervalValue, crossDistance);
+
+  });
+
+
+  // 분석결과 차트 생성
+  document.querySelector("#btnAnalysis").addEventListener("click", function() {
+
+	  if(selectMode == 'freeSelectMode'){
+		  	let crossDistanceValue = Number($('#crossDistance').val());
+		  	//0207
+		  	profileTerrain.table = document.getElementById("tableResult");
+		  	//종단면
+            profileTerrain.elevationChartProfileTitle = "* 종단면";
+            profileTerrain.elevationChartProfileNm = "elevationChart_profile";
+		  	//횡단면
+            profileTerrain.elevationChartCrossTitle = "* 횡단면";
+            profileTerrain.elevationChartCrossNm = "elevationChart_cross_";
+
+			profileTerrain.analysisStart(crossDistanceValue);
+
+	  }else{
+		// 이전 차트 결과 제거
+		    ws3d.viewer.objectManager.removeGroupGeometries(crossSection.profileMarkerGroupId);
+		    if(crossSection.crossSectionChartArray.length > 0) {
+		      for(let i = 0; i < crossSection.crossSectionChartArray.length; i++) {
+		        if(crossSection.crossSectionChartArray[i]) {
+		        	crossSection.crossSectionChartArray[i].destroy();
+		        }
+		      }
+		    }
+		    crossSection.crossSectionChartArray = [];
+		    if(crossSection) {
+		      const crossSectionObjectOptions = {
+		        drawCrossLine: false,
+		        longLineNm: '종단면',
+   	        crossLineNm: '횡단 지점'
+		      };
+
+		      // 단면도 분석 수행
+		      crossSection.analyzeCrossSection(crossSectionObjectOptions, (crossSectionResultMap) => {
+
+		            if(crossSectionResultMap !== null) {
+		              let minHeight = 0;
+		              let maxHeight = 0;
+		              crossSectionResultMap.forEach((value, key, mapObject) => {
+		                if(minHeight === 0) { minHeight = value.minHeight; }
+		                if(maxHeight === 0) { maxHeight = value.maxHeight; }
+		                if(minHeight > value.minHeight) { minHeight = value.minHeight; }
+		                if(maxHeight < value.maxHeight) { maxHeight = value.maxHeight; }
+		              });
+		              minHeight = Math.floor((minHeight-5) / 10) * 10;
+		              maxHeight = Math.ceil((maxHeight+5) / 10) * 10;
+
+		             profileTerrain.table = document.getElementById("tableResult");
+
+		             for (var i = 0; i < crossSectionResultMap.size; i++) {
+		                 let cntNum = i;
+		                 if (cntNum == 0) {
+		                     let headlineDiv = document.createElement('div');
+		                     headlineDiv.classList.add('headline');
+		                     headlineDiv.innerHTML = "<h6 class='title'>* 종단면</h6>";
+		                     profileTerrain.table.appendChild(headlineDiv);
+		                     let canvas = document.createElement('canvas');
+		                     canvas.id = 'elevationChart_profile';
+		                     profileTerrain.table.appendChild(canvas);
+		                     const no0Element = document.getElementById('elevationChart_profile');
+		                     const no0Chart = crossSection.createChartByCrossSectionData(no0Element, crossSectionResultMap.get(crossSectionObjectOptions.longLineNm), minHeight, maxHeight);
+		                     crossSection.crossSectionChartArray.push(no0Chart);
+		                 } else {
+		                     let headlineDiv = document.createElement('div');
+		                     headlineDiv.classList.add('headline');
+		                     headlineDiv.innerHTML = "<h6 class='title'>* 횡단면(" + cntNum + ")</h6>";
+		                     profileTerrain.table.appendChild(headlineDiv);
+		                     let canvas = document.createElement('canvas');
+		                     canvas.id = 'elevationChart_cross_' + cntNum;
+		                     profileTerrain.table.appendChild(canvas);
+		                     const element = document.getElementById('elevationChart_cross_' + cntNum);
+		                     const chart = crossSection.createChartByCrossSectionData(element, crossSectionResultMap.get(crossSectionObjectOptions.crossLineNm + cntNum), minHeight, maxHeight, cntNum);
+		                     crossSection.crossSectionChartArray.push(chart);
+		                 }
+		             }
+
+		            } else {
+		              alert('종횡단면 라인이 존재하지않습니다.', function(){});
+		            }
+		          });
+		    }
+	  }
+  });
+
+  // 초기화 버튼 클릭
+  document.querySelector("#btnInit").addEventListener("click", function() {
+    profileTerrain.initProfileAnalysis();
+    let tableResult = document.createElement("div");
+ 	tableResult.className = "content";
+ 	tableResult.id = "tableResult";
+ 	tableResult.style.height = "195px";
+ 	document.body.appendChild(tableResult);
+ 	$('#btn_freeSection, #btn_createCrossSectionPlot').prop('disabled', false);
+ 	$('#btnSampleTerrainByLine').prop('disabled', true);
+ 	$('#actIntervalSet1, #actIntervalSet2').prop('disabled', false);
+ 	$('#actIntervalSet1, #actIntervalSet2').addClass('hide');
+ 	$('#crossDistanceNm, #crossDistance, #crossIntervalNm, #crossInterval').addClass('hide');
+ 	$('#btnSampleTerrainByCrossLine, #btnCrossPointInterval').addClass('hide');
+ 	$('#crossIntervalDistanceNm, #crossIntervalDistance').addClass('hide');
+  });
+
+
+  $('#btn_freeSection').click(function() {
+	    selectMode = 'freeSelectMode';
+	    $('#btn_createCrossSectionPlot').prop('disabled', true);
+	    $('#crossIntervalDistanceNm').addClass('hide');
+	    $('#crossIntervalDistance').addClass('hide');
+	    $('#btnSampleTerrainByLine').prop('disabled', false);
+  });
+  $('#btn_createCrossSectionPlot').click(function() {
+	    selectMode = 'jibunSelectMode';
+	    $('#btn_freeSection').prop('disabled', true);
+	    $('#crossIntervalDistanceNm').removeClass('hide');
+	    $('#crossIntervalDistance').removeClass('hide');
+	    $('#btnSampleTerrainByLine').prop('disabled', false);
+  });
+
+
+  // 단면도 필지 객체 생성
+  document.querySelector('#btn_createCrossSectionPlot').addEventListener('click', () => {
+    let crossSectionPlotGeoJSON = '{"type":"MultiPolygon","coordinates":[[[[126.981617388,37.566425394],[126.981616704,37.566442063],[126.981609635,37.566636405],[126.981638375,37.566673801],[126.981693951,37.56667354],[126.981794317,37.566668853],[126.981799671,37.566668602],[126.981804878,37.566668756],[126.981829666,37.566669508],[126.981835982,37.5666695],[126.981987849,37.566669237],[126.982068496,37.566669097],[126.982247901,37.566670478],[126.982259673,37.56667102],[126.982415987,37.566670325],[126.982449726,37.566639967],[126.982453367,37.566564645],[126.982446582,37.566538065],[126.982436968,37.566510133],[126.982418868,37.566470036],[126.982341916,37.566406504],[126.982337954,37.566406503],[126.982138221,37.566232129],[126.982098046,37.566204642],[126.982047119,37.56617355],[126.981964498,37.566147407],[126.981627535,37.566148342],[126.981623421,37.566299167],[126.981617388,37.566425394]]]]}'
+    try{
+      crossSectionPlotGeoJSON = JSON.parse(crossSectionPlotGeoJSON);
+    } catch(e) {
+      alert('필지정보가 JSON 형식이 아닙니다.');
+      return;
+    }
+
+    selectMode = 'jibunSelectMode';
+    if(!crossSection) {
+      crossSection = new CrossSection('crossSection1', 'anlyzWithSelectedPlot');
+      crossSection.createCrossSectionPlot(crossSectionPlotGeoJSON);
+    } else {
+      crossSection.createCrossSectionPlot(crossSectionPlotGeoJSON);
+    }
+  });
+
+
+  document.querySelector('#actIntervalSet1').addEventListener("click", function() {
+	  $('#actIntervalSet2').prop('disabled', true);
+	  $('#btnSampleTerrainByCrossLine').removeClass('hide');
+	  $('#btnCrossPointInterval').addClass('hide');
+	  $('#crossDistanceNm').removeClass('hide');
+	  $('#crossDistance').removeClass('hide');
+	  $('#crossIntervalNm').addClass('hide');
+	  $('#crossInterval').addClass('hide');
+	  $('#actIntervalSet2').prop('disabled', true);
+  });
+  document.querySelector('#actIntervalSet2').addEventListener("click", function() {
+	  $('#actIntervalSet1').prop('disabled', true);
+	  $('#btnCrossPointInterval').removeClass('hide');
+	  $('#btnSampleTerrainByCrossLine').addClass('hide');
+	  $('#crossDistanceNm').removeClass('hide');
+	  $('#crossDistance').removeClass('hide');
+	  $('#crossIntervalNm').removeClass('hide');
+	  $('#crossInterval').removeClass('hide');
+	  $('#actIntervalSet1').prop('disabled', true);
+  });
+
+  </script>
+</body>
+</html>

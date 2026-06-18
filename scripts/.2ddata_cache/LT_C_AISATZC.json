@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISATZC",
+  "svc_ide": "aisatzc",
+  "name": "비행장교통구역",
+  "cat": "비행장교통구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "atm_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "경계구역라벨1"
+    },
+    {
+      "name": "atm_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "경계구역라벨2"
+    },
+    {
+      "name": "atm_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "경계구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<!-- 
+	브이월드 WebGL API 2.0 마커 샘플
+ -->
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<title>add3DModel(glb,gltf)</title>
+	<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>	
+</head>
+
+<body>
+
+	<div id="vmap" style="width:100%;height:300px;left:0px;top:0px"></div>
+	<input type="file" id="up_file" >  <input type="button" value ="데이터로드" id="fileload" name="fileload" onclick="fileload();">
+	<!--  accept=".glb, .gltf"  -->
+	<!-- <input type="button" onclick="createGlb()" value="경로직접설정 glb">
+	<input type="button" onclick="createGltf()" value="경로직접설정 gltf"> -->
+	<div id="check" style="width:100%;height:100px;left:0px;top:0px; white-space: pre-line;"></div>
+	
+<script type="text/javascript">
+
+	var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.921883, 37.524370, 2400),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+	var map = new vw.Map();
+	map.setOption( options );			
+	map.start();
+			
+	var check = `
+			1. win10의 경우 3D 뷰어 기능에서 gltf 객체를 다운로드 받을 수 있습니다.
+			해당 객체를 gltf로 저장 후 데이터로드를 하면 됩니다.
+			`;
+
+	function fileload(){
+
+		var tmppath = window.URL.createObjectURL($('[type=file]')[0].files[0]);
+
+		var point = new vw.CoordZ( 126.921883, 37.524370, 1);
+		var options = { scale: 100000, minimumPixelSize: 10 };
+		//var options = { minimumPixelSize: 200 };
+		var id = "test1";
+
+		var modelz = new vw.geom.ModelZ(id, tmppath, point, options );
+		modelz.create();
+		// 이벤트 처리 함수이며, 파라미터로 클릭시 window 픽셀, ecef좌표, cartographic좌표(실제경위도), 객체정보를 인수로 받는다.
+		var eventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {			
+			if ( featureInfo != null ) {
+				// featureInfo 와 Point객체와는 다름. 
+				// Point 객체를 가져올 경우 featureInfo.groupId로 가져옴.(그룹별 아이디라기 보다는 개별아이디.)
+				var id = featureInfo.groupId;
+				var pointObj = map.getObjectById( id );				
+				// 텍스트문구(HTML)
+				var html = '모델 등록 이벤트';			
+				// 제목 title
+				var title = "테스트";
+				// 식별아이디, 탑재컨테이너, 제목, html, 레이어가로길이, 레이어세로길이, 클릭 이벤트X, 클릭 이벤트Y
+				pop = new vw.Popup("pop01", "vmap", title, html, 450, 300, windowPosition.x, windowPosition.y);
+				pop.create();
+			}
+		}
+		modelz.addEventListener(eventHandler);
+
+	}
+
+	$("#check").html(check)	
+	
+	function createGlb() {		
+		var id = "test3";
+		//var url = "./경로를 직접 설정 합니다.";
+		var point = new vw.CoordZ( 126.921883, 37.524370, 1);
+		var options = { scale: 100000, minimumPixelSize: 1000 };
+		//var options = { minimumPixelSize: 200 };
+		var modelz = new vw.geom.ModelZ(id, url, point, options );
+		modelz.create();
+		// 이벤트 처리 함수이며, 파라미터로 클릭시 window 픽셀, ecef좌표, cartographic좌표(실제경위도), 객체정보를 인수로 받는다.
+		var eventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {			
+			if ( featureInfo != null ) {
+				// featureInfo 와 Point객체와는 다름. 
+				// Point 객체를 가져올 경우 featureInfo.groupId로 가져옴.(그룹별 아이디라기 보다는 개별아이디.)
+				var id = featureInfo.groupId;
+				var pointObj = map.getObjectById( id );				
+				// 텍스트문구(HTML)
+				var html = '모델 등록 이벤트';			
+				// 제목 title
+				var title = "테스트";
+				// 식별아이디, 탑재컨테이너, 제목, html, 레이어가로길이, 레이어세로길이, 클릭 이벤트X, 클릭 이벤트Y
+				pop = new vw.Popup("pop01", "vmap", title, html, 450, 300, windowPosition.x, windowPosition.y);
+				pop.create();
+			}
+		}
+		modelz.addEventListener(eventHandler);
+	}
+		
+	function createGltf() {
+		var url = "./Hovering drone.gltf";
+		var id = "test5";
+		var point = new vw.CoordZ( 126.921883, 37.521370, 1);
+		// 1. 줌레벨에 관계없이 일정한 크기를 가짐.
+		var options = { scale: 100000, minimumPixelSize: 1};
+		// 2. 줌레벨이 아래로 갈수록 일정이상에서는 크기가 커짐.
+		//var options = { scale: 400, minimumPixelSize: 50 };
+		var modelz2 = new vw.geom.ModelZ(id);
+		modelz2.setUrl(url);
+		modelz2.setCoordz(point);
+		modelz2.setOptions(options);
+		modelz2.create();
+	}
+</script>
+</body>
+</html>

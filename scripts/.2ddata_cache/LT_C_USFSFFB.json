@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_USFSFFB",
+  "svc_ide": "usfsffb",
+  "name": "소방서관할구역",
+  "cat": "소방서관할구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "ward_id",
+      "single_search": false,
+      "type": "",
+      "desc": "소방서코드"
+    },
+    {
+      "name": "ward_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "소방서명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

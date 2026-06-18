@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_WGISIEGUG",
+  "svc_ide": "wgisiegug",
+  "name": "국가산업단지",
+  "cat": "국가산업단지",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "e_name",
+      "single_search": false,
+      "type": "",
+      "desc": "단지번호"
+    },
+    {
+      "name": "e_code",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

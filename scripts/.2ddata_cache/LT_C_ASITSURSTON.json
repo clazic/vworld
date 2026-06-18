@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_ASITSURSTON",
+  "svc_ide": "asitsurston",
+  "name": "자갈함량",
+  "cat": "자갈함량",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "code_sg",
+      "single_search": false,
+      "type": "",
+      "desc": "자갈함량코드"
+    },
+    {
+      "name": "label",
+      "single_search": false,
+      "type": "",
+      "desc": "자갈함량"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

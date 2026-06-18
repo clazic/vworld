@@ -1,0 +1,45 @@
+{
+  "data_id": "LT_L_FRSTCLIMB",
+  "svc_ide": "frstclimb",
+  "name": "등산로",
+  "cat": "등산로",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "sec_len",
+      "single_search": false,
+      "type": "",
+      "desc": "구간거리(m)"
+    },
+    {
+      "name": "up_min",
+      "single_search": false,
+      "type": "",
+      "desc": "상행속도(분)"
+    },
+    {
+      "name": "down_min",
+      "single_search": false,
+      "type": "",
+      "desc": "하행속도(분)"
+    },
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "난이도(상, 중, 하)"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    },
+    {
+      "name": "mntn_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "산명칭"
+    }
+  ]
+}

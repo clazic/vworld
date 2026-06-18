@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>initHome</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>	
+</head>
+
+<body>
+<div id="vmap" style="width:99%;height:300px;left:0px;top:0px"></div>
+
+<center>
+<h3>3D 지도 초기 위치로 이동 :</h3>
+<input type="button" value="초기지도이동" onclick="javascript:flyHome();"/>&nbsp;&nbsp;
+</center>
+
+<script>
+
+    var map;
+
+    /* begin -------- 맵 초기화 코드 --------- */
+    function vwmap() {		
+		var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.921883, 37.524370, 2982400),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+		map = new vw.Map();
+		map.setOption( options );			
+		map.start();
+			
+    }
+    
+    // 웹지엘 지도 호출.
+    vwmap(); 
+
+    /* end -------- 맵 초기화 코드 --------- */
+    
+    function flyHome() {
+    	if ( map != null ) {
+    		vw.NavigationZoom.initHome();
+    		
+    	}
+    }
+	
+</script>
+</body>
+</html>

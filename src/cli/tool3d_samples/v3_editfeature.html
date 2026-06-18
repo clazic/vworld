@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<!-- 
+	브이월드 WebGL API 2.0 마커 샘플
+ -->
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>TextMarker</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+    <div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+    <input type="button" onclick="createMarker()" value="마커생성">
+    <input type="button" onclick="removeMarker()" value="마커삭제">
+    <input type="button" onclick="updateMarker()" value="마커내용변경">
+    <!-- 지도가 그려지는 영역 조정 -->
+
+    <script type="text/javascript">
+        var map;
+
+        /* begin -------- 맵 초기화 코드 --------- */
+        function vwmap() {
+
+            var options = {
+                mapId: "vmap",
+                initPosition: new vw.CameraPosition(
+                    new vw.CoordZ(126.965007, 37.6, 62300),
+                    new vw.Direction(0, -90, 0)
+                ),
+                logo: true,
+                navigation: true
+            };
+
+            map = new vw.Map();
+            map.setOption(options);
+            map.start();
+
+        }
+        /* end -------- 맵 초기화 코드 --------- */
+
+
+        /* begin -------- html document ready 콜백 등록 --------- */
+        if (document.readyState === "complete" || (document.readyState !== "loading" && !document.documentElement.doScroll)) {
+            onDomReady();
+        } else {
+            document.addEventListener("DOMContentLoaded", onDomReady);
+        }
+        /* end  -------- html document ready 콜백 등록 --------- */
+
+        function onDomReady() {
+            vwmap(); //페이지 로드 완료 후 맵초기화호출
+
+        }
+
+        function createMarker() {
+            // 높이값을 지정하여 마커 생성
+            var title1 = "camp1";
+            var x = 126.921883;
+            var y = 37.524370;
+            var text = '<div class="vworld-info-window"><p><h2>밤나무계곡 오토캠핑장</h2></p>';
+            text += "<p><b>검색주소</b> : 가평군 북면 토대리 408</p>";
+            text += "<p><b>경도</b> : 비공개</p>";
+            text += "<p><b>위도</b> : 동해물과백두산이 마르고닳도록 하느님이 보우하사 우리나라 만세. 무궁화삼천리 화려강산 대한사람 대한사람 길이 보전하세.</p>";
+            text += "<p><b>물놀이 명칭</b> : 가평천</p>";
+            text += "<p><b>시군구</b> : 가평군</p>";
+            text += "<p><b>읍면</b> : 동해물과백두산이 마르고닳도록 하느님이 보우하사 우리나라 만세. 무궁화삼천리 화려강산 대한사람 대한사람 길이 보전하세.</p>";
+            text += "<p><b>상세 주소지</b> : 도대리 408</p>";
+            text += "<p><b>명칭</b> : 밤나무계곡 오토캠핑장</p>";
+            text += "<p><b>분류</b> : 계곡. 동해물과 백두산이 마르고 닳도록 하느님이 보우하사 우리나라 만세. 무궁화 삼천리 화려강산 대한사람.</p>";
+            text += "</div>";
+
+            var imgpath = "https://map.vworld.kr/images/v4map/pinkpin.png";
+            map.createMarker(title1, x, y, text, imgpath, null, null, 20);
+
+            // labelOptions을 지정하여 마커 생성
+            var title2 = "test2";
+            var x = 126.921883;
+            var y = 37.524371;
+            var text = "테스트2<br>테스트2<br>테스트2<br>";
+            var imgpath = "https://map.vworld.kr/images/v4map/bluepin.png";
+
+            var labelText = "라벨적용 테스트2";
+
+            var labelOptions = {
+                //showBackground : true			// 라벨 백그라운드 적용유무
+                //,backgroundColor : ws3d.common.Color.fromCssColorString('#FFFFFF').withAlpha(0.9)  // 백그라운드 css색상으로 부터 color생성하기
+                text: labelText // 라벨 적용.
+                    ,
+                font: '20px 나눔고딕,sans-serif' // 글자폰트
+                    ,
+                fillColor: ws3d.common.Color.fromCssColorString('#FF0000') // 글자색상
+                    ,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY // 라벨이 지형에 파뭍히지 않도록 설정.  
+                    ,
+                style: ws3d.common.LabelStyle.FILL_AND_OUTLINE // 라벨 글자 안쪽 및 외곽 색상 채우기 FILL, FILL_AND_OUTLINE, OUTLINE
+                    ,
+                pixelOffset: new ws3d.common.Cartesian2(0, 70) // 생략가능. 생략시 마커 위에 표시됨. x : 0 - 가운데, (음수)-50 - 왼쪽방향, (양수)50 - 오른쪽방향, y : 0 - 아이콘 바로 위, (음수)-50 : 위쪽 방향, (양수) 50 : 아래쪽방향
+            };
+
+            map.createMarker(title2, x, y, text, imgpath, 250, 120, 100, labelOptions);
+        }
+
+        function removeMarker() {
+            // 객체 삭제는 2가지 방법이 존재합니다.
+            /*  // 아이디로 삭제하는 법. 
+    	var _obj = map.removeObjectById("test1");
+        console.log("obj2 :" , _obj); */
+            // 객체로 삭제하는 법.
+            var Obj = map.getObjectById("camp1");
+            //console.log("Obj :" , Obj);
+            map.removeObject(Obj);
+        }
+
+        function updateMarker() {
+            var Obj = map.getObjectById("test2");
+            var x = 126.961883;
+            var y = 37.504770;
+            var text = "테스트3<br>테스트3<br>테스트3<br>";
+            Obj.popupHeight = 100;
+            Obj.popupWidth = 100;
+            Obj.popupHtml = text;
+            Obj.show();
+
+            console.log("Obj :", Obj);
+        }
+    </script>
+</body>
+
+</html>

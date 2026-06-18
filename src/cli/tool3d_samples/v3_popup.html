@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>LayerPopup</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+ <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+<input type="button" onclick="setMarker()" value="이벤트 팝업부여">&nbsp;
+<input type="button" onclick="createMarker()" value="Map객체의 마커생성">
+<script>
+
+var options = {
+    mapId: "vmap",
+    initPosition: new vw.CameraPosition(
+        new vw.CoordZ(127.425, 38.196, 1548700),
+        new vw.Direction(0, -90, 0)
+    ),
+    logo: true,
+    navigation: true
+};
+
+var map = new vw.Map();
+map.setOption(options);
+map.start();
+			
+var markers = new Array();
+
+//이벤트 생성
+function setMarker() {
+	var point = map.getObjectById("aaa");
+    point.addEventListener(eventHandler);
+} 
+
+//이벤트 제거 시 
+function removeMarker() {
+	var point = map.getObjectById("aaa");
+    point.addEventListener(eventHandler);
+}   
+
+var eventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {			
+	if ( featureInfo != null ) {
+		// featureInfo 와 Point객체와는 다름. 
+		// Point 객체를 가져올 경우 featureInfo.groupId로 가져옴.(그룹별 아이디라기 보다는 개별아이디.)
+		var id = featureInfo.groupId;
+		var pointObj = map.getObjectById( id );				
+		// 텍스트문구(HTML)
+		var html = '모델 등록 이벤트';			
+		// 제목 title
+		var title = "테스트";
+		// 식별아이디, 탑재컨테이너, 제목, html, 레이어가로길이, 레이어세로길이, 클릭 이벤트X, 클릭 이벤트Y
+		pop = new vw.Popup("pop01", "vmap", title, html, 450, 300, windowPosition.x, windowPosition.y);
+		pop.create();
+	}
+}
+
+
+    function createMarker() {
+    	// 높이값을 지정하여 마커 생성
+    	var title1 = "포인트1";
+    	var x = 126.921883;
+    	var y = 37.524370;
+		var point1Coord = new vw.Coord(x, y);
+		var pt = new vw.geom.Point( point1Coord );
+
+		pt.setImage("https://map.vworld.kr/images/op02/map_point.png");
+		pt.setName(title1);
+		pt.setFont( "고딕" );
+		pt.setId("aaa");
+		pt.setFontSize( 20 );
+		pt.setDistanceFromTerrain(10);
+		pt.create();
+    }
+    
+</script>
+</body>
+</html>

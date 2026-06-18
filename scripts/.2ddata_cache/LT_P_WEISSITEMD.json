@@ -1,0 +1,87 @@
+{
+  "data_id": "LT_P_WEISSITEMD",
+  "svc_ide": "weissitemd",
+  "name": "수질측정망농업용수지점",
+  "cat": "수질측정망농업용수지점",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "area",
+      "single_search": false,
+      "type": "",
+      "desc": "권역"
+    },
+    {
+      "name": "area_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "권역코드"
+    },
+    {
+      "name": "water",
+      "single_search": false,
+      "type": "",
+      "desc": "수계"
+    },
+    {
+      "name": "am_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "중권역명"
+    },
+    {
+      "name": "am_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "중권역코드"
+    },
+    {
+      "name": "st_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "측정소명"
+    },
+    {
+      "name": "st_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "측정소코드"
+    },
+    {
+      "name": "st_id",
+      "single_search": false,
+      "type": "",
+      "desc": "채수지검"
+    },
+    {
+      "name": "chk_mngt",
+      "single_search": false,
+      "type": "",
+      "desc": "조사기관"
+    },
+    {
+      "name": "int_year",
+      "single_search": false,
+      "type": "",
+      "desc": "설치년도"
+    },
+    {
+      "name": "clo_year",
+      "single_search": false,
+      "type": "",
+      "desc": "폐쇄년도"
+    },
+    {
+      "name": "bjd_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "법정동코드"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

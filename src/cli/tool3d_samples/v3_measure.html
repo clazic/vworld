@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- 
+	브이월드 WebGL API 2.0 마커 샘플
+ -->
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<title>masure</title>
+	<script type="text/javascript"
+		src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+	<div id="vmap" style="width:98%;height:300px;left:0px;top:0px"></div>
+<input type="button" onclick="measureHeight()" value="높이">
+<input type="button" onclick="measureLine()" value="거리">
+<input type="button" onclick="measureArea()" value="면적">
+<input type="button" onclick="stop()" value="종료">
+<input type="button" onclick="erase()" value="지우기">
+	<!-- 지도가 그려지는 영역 조정 -->
+
+	<script type="text/javascript">
+	
+	var options =   {
+				mapId : "vmap",
+				// 12300 Z값은 meter단위입니다. 지면으로부터 40-50meter 오차간격이 있습니다. 
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.968007,37.4998313, 12300),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+	var map = new vw.Map();
+	map.setOption( options );			
+	map.start();
+			
+    // 높이 측정
+    function measureHeight() {
+		if( map != null ) {
+			// static 메서드만 있음. start(), stop().
+			vw.MeasureHeight.start();
+			
+			// 우클릭시 종료 이벤트 설정
+			var evtMeasureRightHandler = function(event) {
+	   			vw.MeasureHeight.stop();
+	   		}			
+			vw.EventProcess.add( vw.MapController.RIGHTUPDNCLICK, map.onMouseRightDown, evtMeasureRightHandler);
+		}
+    }
+    
+    // 거리 측정
+    function measureLine() {
+    	if ( map != null ) {
+    		// static 메서드만 있음. start(), stop().
+			vw.MeasureLine.start();
+			
+			// 우클릭시 종료 이벤트 설정
+			var evtMeasureRightHandler = function(event) {
+				vw.MeasureLine.stop();
+	   		}
+			
+    		vw.EventProcess.add( vw.MapController.RIGHTUPDNCLICK, map.onMouseRightDown, evtMeasureRightHandler);
+    	}
+    }
+    
+    // 면적 측정
+    function measureArea() {
+    	if ( map != null ) {
+    		// static 메서드만 있음. start(), stop().
+    		vw.MeasureArea.start();
+    		
+			// 우클릭시 종료 이벤트 설정
+			var evtMeasureRightHandler = function(event) {
+				vw.MeasureArea.stop();
+	   		}
+			
+    		vw.EventProcess.add( vw.MapController.RIGHTUPDNCLICK, map.onMouseRightDown, evtMeasureRightHandler);	
+    	}
+    }
+    
+    // 측정 지우기.
+    function erase() {
+    	
+    	map.clear();
+    }
+    
+    // 버튼 이벤트로 종료.
+    function stop() {
+    	
+    	vw.MeasureHeight.stop();
+    	vw.MeasureLine.stop();
+    	vw.MeasureArea.stop();
+    }
+
+
+	</script>
+</body>
+
+</html>

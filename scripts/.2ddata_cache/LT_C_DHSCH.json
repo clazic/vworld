@@ -1,0 +1,75 @@
+{
+  "data_id": "LT_C_DHSCH",
+  "svc_ide": "dhsch",
+  "name": "고등학교학교군",
+  "cat": "고등학교학교군",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "objectid",
+      "single_search": false,
+      "type": "",
+      "desc": "공간객체ID"
+    },
+    {
+      "name": "hakgudo_id",
+      "single_search": false,
+      "type": "",
+      "desc": "학구ID"
+    },
+    {
+      "name": "hakgudo_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "학구명"
+    },
+    {
+      "name": "hakgudo_gb",
+      "single_search": false,
+      "type": "",
+      "desc": "학구분류"
+    },
+    {
+      "name": "sd_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "시도코드"
+    },
+    {
+      "name": "edu_up_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "시도교육청코드"
+    },
+    {
+      "name": "edu_up_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시도교육청명"
+    },
+    {
+      "name": "edu_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "교육지원청코드"
+    },
+    {
+      "name": "edu_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "교육지원청명"
+    },
+    {
+      "name": "base_dt",
+      "single_search": false,
+      "type": "",
+      "desc": "데이터기준일자"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

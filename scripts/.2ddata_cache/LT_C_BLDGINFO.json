@@ -1,0 +1,93 @@
+{
+  "data_id": "LT_C_BLDGINFO",
+  "svc_ide": "bldginfo",
+  "name": "건축물정보",
+  "cat": "건축물정보",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "bld_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "건물명칭"
+    },
+    {
+      "name": "dong_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "건물동명칭"
+    },
+    {
+      "name": "usability",
+      "single_search": false,
+      "type": "",
+      "desc": "건물용도"
+    },
+    {
+      "name": "strct_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "구조"
+    },
+    {
+      "name": "grnd_flr",
+      "single_search": false,
+      "type": "",
+      "desc": "지상층수"
+    },
+    {
+      "name": "ugrnd_flr",
+      "single_search": false,
+      "type": "",
+      "desc": "지하층수"
+    },
+    {
+      "name": "archarea",
+      "single_search": false,
+      "type": "",
+      "desc": "건물면적"
+    },
+    {
+      "name": "height",
+      "single_search": false,
+      "type": "",
+      "desc": "건물높이"
+    },
+    {
+      "name": "vl_rat",
+      "single_search": false,
+      "type": "",
+      "desc": "용적률"
+    },
+    {
+      "name": "bc_rat",
+      "single_search": false,
+      "type": "",
+      "desc": "건폐율"
+    },
+    {
+      "name": "totalarea",
+      "single_search": false,
+      "type": "",
+      "desc": "연면적"
+    },
+    {
+      "name": "platarea",
+      "single_search": false,
+      "type": "",
+      "desc": "대지면적"
+    },
+    {
+      "name": "useapr_day",
+      "single_search": false,
+      "type": "",
+      "desc": "사용승인일자"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

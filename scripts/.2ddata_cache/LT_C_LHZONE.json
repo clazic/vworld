@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_C_LHZONE",
+  "svc_ide": "lhzone",
+  "name": "사업지구경계도",
+  "cat": "사업지구경계도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "zonename",
+      "single_search": false,
+      "type": "",
+      "desc": "사업지구경계도"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

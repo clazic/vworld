@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_WGISREPLAN",
+  "svc_ide": "wgisreplan",
+  "name": "공유수면매립기본계획",
+  "cat": "공유수면매립기본계획",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "rec_ba_seq",
+      "single_search": false,
+      "type": "",
+      "desc": "일련번호"
+    },
+    {
+      "name": "name",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

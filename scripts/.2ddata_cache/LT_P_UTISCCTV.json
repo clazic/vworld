@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_P_UTISCCTV",
+  "svc_ide": "utiscctv",
+  "name": "교통CCTV",
+  "cat": "교통CCTV",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "locate",
+      "single_search": false,
+      "type": "",
+      "desc": "소재지"
+    },
+    {
+      "name": "cctvname",
+      "single_search": false,
+      "type": "",
+      "desc": "cctv명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

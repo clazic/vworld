@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_P_NSNMSSITENM",
+  "svc_ide": "nsnmssitenm",
+  "name": "국가지명",
+  "cat": "국가지명",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "land_kpyo",
+      "single_search": false,
+      "type": "",
+      "desc": "국가지명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

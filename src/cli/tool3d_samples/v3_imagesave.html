@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ImageSave</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+ <div id="vmap" style="width:100%;height:330px;left:0px;top:0px"></div>
+<input type="button" value="이미지다운로드" onclick="javascript:saveAsImage();"/>
+<script>
+    var map;
+    /* begin -------- 맵 초기화 코드 --------- */
+    function vwmap() {  		
+		var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.921883, 37.524370, 482400),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+			map = new vw.Map();
+			map.setOption( options );			
+			map.start();
+    }
+    
+    vwmap();
+	
+	function saveAsImage() {
+    	map.saveAsImage("imageDownload.png");	
+    }	
+    
+</script>
+</body>
+</html>

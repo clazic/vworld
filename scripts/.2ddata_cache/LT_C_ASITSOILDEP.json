@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_ASITSOILDEP",
+  "svc_ide": "asitsoildep",
+  "name": "유효토심",
+  "cat": "유효토심",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "code_ad",
+      "single_search": false,
+      "type": "",
+      "desc": "유효토심코드"
+    },
+    {
+      "name": "label",
+      "single_search": false,
+      "type": "",
+      "desc": "유효토심"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

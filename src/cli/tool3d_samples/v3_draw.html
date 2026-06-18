@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<!-- 
+	브이월드 WebGL API 2.0 마커 샘플
+ -->
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Remove-Update</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+    <div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+    <!-- 지도가 그려지는 영역 조정 -->
+    <input type="button" onclick="setPoint()" value="포인트">
+    <input type="button" onclick="setPointZ()" value="포인트Z">
+    <input type="button" onclick="makeLine()" value="라인생성">
+    <input type="button" onclick="remove()" value="삭제">
+    <input type="button" onclick="redraw()" value="다시그리기">
+
+
+
+    <script type="text/javascript">
+        var map;
+
+        /* begin -------- 맵 초기화 코드 --------- */
+        function vwmap() {
+
+            var options = {
+                mapId: "vmap",
+                initPosition: new vw.CameraPosition(
+                    new vw.CoordZ(126.965007, 37.6, 62300),
+                    new vw.Direction(0, -90, 0)
+                ),
+                logo: true,
+                navigation: true
+            };
+
+            // 3D 지도 호출 후 처리되는 함수.
+            vw.ws3dInitCallBack = function() {
+                makeLine();
+            };
+
+            map = new vw.Map();
+            map.setOption(options);
+            map.start();
+
+        }
+        /* end -------- 맵 초기화 코드 --------- */
+
+        /* begin -------- html document ready 콜백 등록 --------- */
+        if (document.readyState === "complete" || (document.readyState !== "loading" && !document.documentElement.doScroll)) {
+            onDomReady();
+        } else {
+            document.addEventListener("DOMContentLoaded", onDomReady);
+        }
+        /* end  -------- html document ready 콜백 등록 --------- */
+        function onDomReady() {
+            vwmap(); //페이지 로드 완료 후 맵초기화호출
+        }
+
+        function setPoint() {
+            var point1Coord = new vw.Coord(126.921883, 37.524370);
+
+            var pt = new vw.geom.Point(point1Coord);
+            pt.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+            pt.setId("test1");
+            pt.setName("2차원 포인트1 ");
+            pt.setFont("고딕");
+            pt.setFontSize(5);
+            pt.create();
+
+            var point2Coord = new vw.Coord(126.931883, 37.524370);
+
+            var pt = new vw.geom.Point(point2Coord);
+            pt.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+            pt.setId("test2");
+            pt.setName("2차원 포인트2 ");
+            pt.setFont("고딕");
+            pt.setFontSize(15);
+            pt.create();
+
+            var point3Coord = new vw.Coord(126.941883, 37.524370);
+
+            var pt = new vw.geom.Point(point3Coord);
+            pt.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+            pt.setId("test3");
+            pt.setName("2차원 포인트3 ");
+            pt.setFont("고딕");
+            pt.setFontSize(35);
+            pt.create();
+
+            var point4Coord = new vw.Coord(126.961883, 37.524370);
+
+            var pt = new vw.geom.Point(point4Coord);
+            pt.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+            pt.setId("test4");
+            pt.setName("2차원 포인트4 ");
+            pt.setFont("고딕");
+            pt.setFontSize(55);
+            pt.create();
+
+            var point5Coord = new vw.Coord(126.961883, 37.515370);
+
+            var pt = new vw.geom.Point(point5Coord);
+            pt.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+            pt.setId("test5");
+            pt.setName("2차원 포인트5 ");
+            pt.setFont("고딕");
+            pt.setFontSize(95);
+            pt.create();
+        }
+
+        function setPointZ() {
+            var point1Coord = new vw.Coord(126.981883, 37.524370);
+
+            var pt = new vw.geom.PointZ(point1Coord);
+            pt.setId("test21");
+            pt.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+            pt.setName("2차원 포인트 Z");
+            pt.setFont("고딕");
+            pt.setFontSize(10);
+            // 지면과의 높이.
+            pt.setDistanceFromTerrain(100);
+            pt.create();
+        }
+
+        function makeLine() {
+            var ar = new Array();
+            var outlineColor = vw.Color.BLUE;
+            var fillColor = vw.Color.CYAN;
+            let features = [
+                [126.97533917176143, 37.512621379892884],
+                [126.97533980105186, 37.51081938617552],
+                [126.97251217580528, 37.51081872574082],
+                [126.97251147853889, 37.51262071941401],
+                [126.97533917176143, 37.512621379892884]
+            ]
+
+            features.forEach(function(i) {
+                ar.push(new vw.Coord(i[0], i[1]));
+            })
+
+            var coordCol = new vw.Collection(ar);
+            linestring = new vw.geom.LineStringZ(coordCol);
+            // 생성시에 아이디 설정. 설정을 안할 경우에는 임의의 아이디가 설정됨.
+            linestring.setId("test123");
+            // 색상 기본 설정.
+            //linestring.setFillColor(fillColor);
+            // 투명도를 설정하려면.  vw.Color(RED, GREEN, BLUE, OPACITY)  0~255사이값이며, 0 무색, 255 최대색상값
+            linestring.setFillColor(vw.Color.BLUE);
+            linestring.setWidth(10);
+            linestring.setName("33");
+            linestring.setOutLineColor(vw.Color.RED);
+            linestring.setDistanceFromTerrain(100);
+            // 적용안됨. 현재버전은 디폴트값으로 설정됨.
+            linestring.setOutLineWidth(10);
+
+            linestring.create();
+
+
+            map.getObjectById("test123").setOutLineColor(vw.Color.WHITE)
+            map.getObjectById("test123").setOutLineWidth(20)
+            map.getObjectById("test123").redraw()
+            //var lineObj = map.getObjectById("test123");
+            var coord_start = new vw.Coord(126.968007, 37.3998313);
+            var coord_end = new vw.Coord(126.968007, 37.4998313);
+
+            line = new vw.geom.Line(coord_start, coord_end);
+            line.setId("test124");
+            line.setFillColor(fillColor);
+            line.setWidth(100);
+
+            line.create();
+            console.log("line :", line);
+        }
+
+        function remove() {
+            // 객체 삭제는 2가지 방법이 존재합니다.
+            /*  // 아이디로 삭제하는 법. 
+    	var _obj = map.removeObjectById("test1");
+        console.log("obj2 :" , _obj); */
+            // 객체로 삭제하는 법.
+            var Obj = map.getObjectById("test5");
+            map.removeObject(Obj);
+            map.removeObjectById("test124");
+        }
+
+        function redraw() {
+            // 아이디로 객체를 찾는다.
+            // 모든 그래픽 객체는 redraw() 메서드가 구현되어 있습니다.
+            //test4
+            var pt4 = map.getObjectById("test4");
+            console.log("pt4 :", pt4);
+            if (pt4 != null) {
+                var point4Coord = new vw.Coord(126.971883, 37.527370);
+
+                pt4.setCoord(point4Coord);
+                //pt4.setImage("http://map.vworld.kr/images/v4map/umap/pointer/ico-type1-05.png");
+                pt4.setName("2차원 포인트4");
+                pt4.setFont("궁서");
+                pt4.setFontSize(25);
+                pt4.redraw();
+            }
+        }
+    </script>
+</body>
+
+</html>

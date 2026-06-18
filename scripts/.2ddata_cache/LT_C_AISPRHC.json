@@ -1,0 +1,51 @@
+{
+  "data_id": "LT_C_AISPRHC",
+  "svc_ide": "aisprhc",
+  "name": "비행금지구역",
+  "cat": "비행금지구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "prohibited",
+      "single_search": false,
+      "type": "",
+      "desc": "비행금지구역전체라벨"
+    },
+    {
+      "name": "prh_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "비행금지구역라벨1"
+    },
+    {
+      "name": "prh_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "비행금지구역라벨2"
+    },
+    {
+      "name": "prh_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "비행금지구역라벨3"
+    },
+    {
+      "name": "prh_typ",
+      "single_search": false,
+      "type": "",
+      "desc": "비행금지구역타입"
+    },
+    {
+      "name": "prh_lbl_4",
+      "single_search": false,
+      "type": "",
+      "desc": "비행제한구역라벨4"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "지오메트리"
+    }
+  ]
+}

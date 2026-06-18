@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISUAC",
+  "svc_ide": "aisuac",
+  "name": "(UA)초경량비행장치공역",
+  "cat": "",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "uac_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "초경량비행장치라벨1"
+    },
+    {
+      "name": "uac_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "초경량비행장치라벨2"
+    },
+    {
+      "name": "uac_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "초경량비행장치라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_C_AISFIRC",
+  "svc_ide": "aisfirc",
+  "name": "비행정보구역",
+  "cat": "비행정보구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "fir_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "비행정보구역라벨1"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

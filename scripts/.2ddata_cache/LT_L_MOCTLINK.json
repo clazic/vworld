@@ -1,0 +1,69 @@
+{
+  "data_id": "LT_L_MOCTLINK",
+  "svc_ide": "moctlink",
+  "name": "교통링크",
+  "cat": "교통링크",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "link_id",
+      "single_search": true,
+      "type": "",
+      "desc": "링크ID"
+    },
+    {
+      "name": "road_name",
+      "single_search": false,
+      "type": "",
+      "desc": "도로명"
+    },
+    {
+      "name": "max_spd",
+      "single_search": false,
+      "type": "",
+      "desc": "최고제한속도"
+    },
+    {
+      "name": "rd_rank_h",
+      "single_search": false,
+      "type": "",
+      "desc": "도로등급"
+    },
+    {
+      "name": "rd_type_h",
+      "single_search": false,
+      "type": "",
+      "desc": "도로유형"
+    },
+    {
+      "name": "rest_veh_h",
+      "single_search": false,
+      "type": "",
+      "desc": "통행제한차량"
+    },
+    {
+      "name": "rest_w",
+      "single_search": false,
+      "type": "",
+      "desc": "통과제한하중"
+    },
+    {
+      "name": "rest_h",
+      "single_search": false,
+      "type": "",
+      "desc": "통과제한높이"
+    },
+    {
+      "name": "remark",
+      "single_search": false,
+      "type": "",
+      "desc": "비고"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

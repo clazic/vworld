@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SpecialShape,SpecialShapeZ</title>
+	<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+<div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+<input type="button" onclick="vwSpecialShape()" value="specialshape">&nbsp;&nbsp;
+<input type="button" onclick="redrawZ()" value="redraw">&nbsp;&nbsp;
+<input type="button" onclick="removeZ()" value="remove">
+<script>			
+			var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.965007,37.6, 62300),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+			var map = new vw.Map();
+			map.setOption( options );			
+			map.start();
+			
+    // 도형 생성.
+    function vwSpecialShape()
+    {
+    	// SpecialShape 도형 생성.
+        var coord = new vw.Coord(126.965007,37.6);
+        // 생성자 경위도좌표, 반지름, SpecialShapeType
+        var specialshape = new vw.geom.SpecialShape( coord, 2500, vw.geom.SpecialShapeType.STAR );
+        specialshape.setId( "sshape01" );
+        specialshape.setFillColor( vw.Color.HOTPINK );
+        specialshape.create();
+     	// SpecialShapeZ 도형 생성.
+        var coordz = new vw.CoordZ(126.965007,37.6, 800);
+        
+     	// 생성자 경위도좌표, 반지름, SpecialShapeType
+        var specialshapeZ = new vw.geom.SpecialShapeZ( coordz, 2500, vw.geom.SpecialShapeType.STAR );
+        specialshapeZ.setId( "sshape02" );
+        specialshapeZ.setFillColor( vw.Color.PURPLE );
+        specialshapeZ.setOutLineColor( vw.Color.BLUE );
+        specialshapeZ.setExtrudeHeight(2500);
+        specialshapeZ.create();
+    }
+    // 도형 수정
+    function redrawZ() {
+    	var Obj = map.getObjectById("sshape02");
+    	if ( Obj != null ) {
+        	var coordz = new vw.CoordZ(126.965007,37.6, 1500);
+        	var radius = 500;
+        	Obj.setCenter(coordz);
+            Obj.setRadius(radius);
+            Obj.setFillColor(vw.Color.CYAN);
+            Obj.redraw();	
+    	}
+    }
+    // 도형 삭제
+    function removeZ() {
+    	map.removeObjectById("sshape02");
+    }
+
+</script>
+</body>
+</html>

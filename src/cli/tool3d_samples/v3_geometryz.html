@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>LineZ,PointZ,PolygonZ</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+    <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+    <input type="button" onclick="makeGeometry('LineStringZ')" value="LineStringZ">
+    <input type="button" onclick="makeGeometry('LineZ')" value="LineZ">
+    <input type="button" onclick="makeGeometry('PointZ')" value="PointZ">
+    <input type="button" onclick="makeGeometry('PolygonZ')" value="PolygonZ">
+    <input type="button" onclick="mapReset()" value="전체삭제">
+    <script type="text/javascript">
+        var options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.921883, 37.524370, 554870),
+                new vw.Direction(0, -90, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+        var map = new vw.Map();
+        map.setOption(options);
+        map.start();
+
+        function makeGeometry(pKind) {
+
+            switch (pKind) {
+                case "LineStringZ":
+                    var point1Coord = new vw.Coord(126.921883, 37.524370);
+                    var point2Coord = new vw.Coord(126.951883, 37.524370);
+                    var point3Coord = new vw.Coord(126.981883, 37.554370);
+
+                    var ar = new Array();
+                    ar.push(point1Coord);
+                    ar.push(point2Coord);
+                    ar.push(point3Coord);
+
+                    var coordCol = new vw.Collection(ar);
+                    var linestringZ = new vw.geom.LineStringZ(coordCol);
+                    linestringZ.setId("linestringZ01");
+                    linestringZ.setFillColor(new vw.Color(255, 0, 255, 125));
+                    linestringZ.setWidth(2000);
+                    linestringZ.setOutLineColor(vw.Color.YELLOW);
+                    linestringZ.setDistanceFromTerrain(1000);
+                    linestringZ.create();
+                    break;
+                case "LineZ":
+                    var coord_start = new vw.Coord(126.968007, 37.3998313);
+                    var coord_end = new vw.Coord(126.968007, 37.4398313);
+
+                    var lineZ = new vw.geom.LineZ(coord_start, coord_end);
+                    lineZ.setId("lineZ01");
+                    lineZ.setFillColor(new vw.Color(255, 0, 0, 125));
+                    lineZ.setWidth(1000);
+                    lineZ.setOutLineColor(vw.Color.CYAN);
+                    lineZ.setDistanceFromTerrain(1500);
+                    lineZ.create();
+                    break;
+                case "PointZ":
+                    var point1Coord = new vw.CoordZ(126.921883, 37.524370, 3500);
+                    var ptZ = new vw.geom.PointZ(point1Coord);
+                    ptZ.setId("pointZ1");
+                    ptZ.setImage("https://map.vworld.kr/images/op02/map_point.png");
+                    ptZ.setName("2차원 포인트 1");
+                    ptZ.setFont("고딕");
+                    ptZ.setFontSize(20);
+                    ptZ.create();
+
+                    var point2Coord = new vw.CoordZ(126.821883, 37.524370, 0);
+                    var ptZ2 = new vw.geom.PointZ(point2Coord);
+                    ptZ2.setId("pointZ2");
+                    ptZ2.setImage("https://map.vworld.kr/images/op02/map_point.png");
+                    ptZ2.setName("2차원 포인트 2");
+                    ptZ2.setFont("고딕");
+                    ptZ2.setFontSize(20);
+                    ptZ2.setDistanceFromTerrain(3700);
+                    ptZ2.create();
+                    break;
+
+                case "PolygonZ":
+                    var point1Coord = new vw.Coord(126.824883, 37.524370);
+                    var point2Coord = new vw.Coord(126.854883, 37.511370);
+                    var point3Coord = new vw.Coord(126.884883, 37.511370);
+
+                    var ar = new Array();
+                    ar.push(point1Coord);
+                    ar.push(point2Coord);
+                    ar.push(point3Coord);
+
+                    var coordCol = new vw.Collection(ar);
+                    var polygonZ = new vw.geom.PolygonZ(coordCol);
+                    polygonZ.setId("polygonZ1");
+                    polygonZ.setFillColor(new vw.Color(122, 255, 255, 180));
+                    polygonZ.setOutLineColor(vw.Color.GOLD);
+                    polygonZ.setDistanceFromTerrain(1500);
+                    polygonZ.setExtrudeHeight(1000);
+                    polygonZ.create();
+                    break;
+            }
+        }
+
+        function mapReset() {
+            map.clear();
+        }
+    </script>
+</body>
+
+</html>

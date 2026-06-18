@@ -1,0 +1,81 @@
+{
+  "data_id": "LT_P_BUSIINCUBATOR",
+  "svc_ide": "busiincubator",
+  "name": "창업보육센터",
+  "cat": "창업보육센터",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "sido",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sigg",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "bui_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "창업보육센터명"
+    },
+    {
+      "name": "bui_url",
+      "single_search": false,
+      "type": "",
+      "desc": "홈페이지주소"
+    },
+    {
+      "name": "opr_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "운영기관명"
+    },
+    {
+      "name": "opr_typ",
+      "single_search": false,
+      "type": "",
+      "desc": "운영기관타입"
+    },
+    {
+      "name": "mainpart",
+      "single_search": false,
+      "type": "",
+      "desc": "주력보육분야"
+    },
+    {
+      "name": "opn_dat",
+      "single_search": false,
+      "type": "",
+      "desc": "센터오픈일"
+    },
+    {
+      "name": "phne",
+      "single_search": false,
+      "type": "",
+      "desc": "전화번호"
+    },
+    {
+      "name": "addr",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "addr_des",
+      "single_search": false,
+      "type": "",
+      "desc": "주소(상세)"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "지오메트리"
+    }
+  ]
+}

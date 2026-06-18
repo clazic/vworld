@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_WKMBBSN",
+  "svc_ide": "wkmbbsn",
+  "name": "대권역",
+  "cat": "대권역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "bbsnnm",
+      "single_search": true,
+      "type": "",
+      "desc": "권역명"
+    },
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "권역분류"
+    },
+    {
+      "name": "bbsncd",
+      "single_search": false,
+      "type": "",
+      "desc": "대권역코드"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

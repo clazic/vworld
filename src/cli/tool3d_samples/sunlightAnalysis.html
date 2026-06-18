@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>sunlightAnalysis</title>
+<!-- 지도 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+
+<!--분석 기능 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/sunlight/sunlight_analysis_api.min.js"></script><!-- 운영_지도-->
+<!--<script type="text/javascript" src="http://localhost:8082/js/dtkmap/tool3d/libapis/sunlight/sunlight_analysis_api.js"></script><!-- 로컬_지도-->
+
+</head>
+
+<body>
+	<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+	<button id="btnPoint" class="btn btn-primary">일조량 지점선택</button><br><br>
+
+	<form class="field" id="frmSetList">
+	<div class="" id="toolbar">
+	<dl>
+		<dt>분석날짜</dt>
+		<dd><label for="anaDate"></label><input type="text" id="anaDate" name="anaDate" class="input date" data-bind="value: contourDate, valueUpdate: 'input'"  onchange="sunlightAnalysis.createSunObject()" valCheck="date" fieldTitle="분석날짜"/></dd>
+		<dt>시간별 태양위치</dt>
+		<dd>
+			<div class="range">
+				<label for="anaTim"><span style="float: left; width:15px; text-align:right;" id="time_span" data-bind="text: contourTime"></span>: 00</label>
+				<input type="range" id="anaTim" name="anaTim" class="form-control-range" min="5.0" max="20.0" step="1"
+                       data-bind="value: contourTime, valueUpdate: 'input'" onchange="sunlightAnalysis.createSunObject()"/>
+			</div>
+		</dd>
+		<dt>분석시간범위</dt>
+		<dd>
+			<label for="anaStTime"></label>
+			<select class="select" style="width: auto;" id="anaStTime" onchange="sunlightAnalysis.anaTimeCheck(this.value, document.getElementById('anaEdTime').value)"></select> ~ <label for="anaEdTime"></label><select class="select" style="width: auto;" id="anaEdTime" onchange="sunlightAnalysis.anaTimeCheck(document.getElementById('anaStTime').value, this.value)"></select></dd>
+		<dt>분석시간간격</dt>
+		<dd>
+			<label for="anlysTimeInterval" style="width: 150px;"></label>
+    		<select class="form-control" id="anlysTimeInterval">
+    		<option value="15">15분</option>
+    		<option value="10">10분</option>
+    		<option value="5">5분</option>
+    		<option value="1">1분</option>
+    		</select></dd>
+	</dl>
+ 	</div>
+ 	</form><br>
+ 	<button id="runAnlys" class="btn btn-primary">분석 수행</button><br>
+
+<script type="text/javascript">
+ function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+  }
+  vwmap();
+   ////웹지엘 3.0 초기지도 초기화
+
+  	document.querySelector('#btnPoint').addEventListener("click", function() {
+	  	sunlightAnalysis.drawPointOnMap();
+  	});
+
+
+  	document.querySelector('#runAnlys').addEventListener("click", function() {
+  		let interval = parseInt(document.getElementById('anlysTimeInterval').value);
+  		let stTime = parseInt(document.getElementById('anaStTime').value)+1;
+  		let endTime = parseInt(document.getElementById('anaEdTime').value);
+		sunlightAnalysis.runSunlight(interval, stTime, endTime, function(ResultInfo){
+			console.log("성공 : " + "clickeddata.selected");
+			console.log(ResultInfo);
+		});
+  	});
+
+ </script>
+</body>
+</html>

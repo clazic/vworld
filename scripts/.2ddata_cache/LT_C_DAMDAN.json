@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_DAMDAN",
+  "svc_ide": "damdan",
+  "name": "단지경계",
+  "cat": "단지경계",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "단지분류명"
+    },
+    {
+      "name": "dan_name",
+      "single_search": false,
+      "type": "",
+      "desc": "단지명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    },
+    {
+      "name": "dan_id",
+      "single_search": false,
+      "type": "",
+      "desc": "단지ID"
+    }
+  ]
+}

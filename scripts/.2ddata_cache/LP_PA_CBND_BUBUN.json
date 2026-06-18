@@ -1,0 +1,63 @@
+{
+  "data_id": "LP_PA_CBND_BUBUN",
+  "svc_ide": "cadastral",
+  "name": "연속지적도",
+  "cat": "연속지적도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "pnu",
+      "single_search": true,
+      "type": "",
+      "desc": "시도(2) + 시군구(3) + 읍면동(3) + 리(2) + 필지구분(1) + 본번(4) + 부번(4) = 19자리"
+    },
+    {
+      "name": "jibun",
+      "single_search": false,
+      "type": "",
+      "desc": "지번"
+    },
+    {
+      "name": "bonbun",
+      "single_search": false,
+      "type": "",
+      "desc": "본번"
+    },
+    {
+      "name": "bubun",
+      "single_search": false,
+      "type": "",
+      "desc": "부번"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    },
+    {
+      "name": "addr",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "gosi_year",
+      "single_search": false,
+      "type": "",
+      "desc": "기준년"
+    },
+    {
+      "name": "gosi_month",
+      "single_search": false,
+      "type": "",
+      "desc": "기준월"
+    },
+    {
+      "name": "jiga",
+      "single_search": false,
+      "type": "",
+      "desc": "지가"
+    }
+  ]
+}

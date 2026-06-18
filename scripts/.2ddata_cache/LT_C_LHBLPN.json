@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_LHBLPN",
+  "svc_ide": "lhblpn",
+  "name": "토지이용계획도",
+  "cat": "토지이용계획도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "blocktype",
+      "single_search": false,
+      "type": "",
+      "desc": "계획구역명"
+    },
+    {
+      "name": "zonename",
+      "single_search": false,
+      "type": "",
+      "desc": "사업지구경계도"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

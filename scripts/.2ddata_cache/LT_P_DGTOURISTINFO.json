@@ -1,0 +1,93 @@
+{
+  "data_id": "LT_P_DGTOURISTINFO",
+  "svc_ide": "dgtouristinfo",
+  "name": "관광안내소",
+  "cat": "관광안내소",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "tur_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "관광안내소명"
+    },
+    {
+      "name": "tur_pos",
+      "single_search": false,
+      "type": "",
+      "desc": "안내소위치명"
+    },
+    {
+      "name": "sido_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sigg_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "hdy_inf",
+      "single_search": false,
+      "type": "",
+      "desc": "휴무일"
+    },
+    {
+      "name": "sws_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "운영시작시각(하절기)"
+    },
+    {
+      "name": "swe_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "운영종료시각(하절기)"
+    },
+    {
+      "name": "wws_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "운영시작시각(동절기)"
+    },
+    {
+      "name": "wwe_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "운영종료시각(동절기)"
+    },
+    {
+      "name": "inf_tel",
+      "single_search": false,
+      "type": "",
+      "desc": "안내소전화번호"
+    },
+    {
+      "name": "new_adr",
+      "single_search": false,
+      "type": "",
+      "desc": "소재지도로명주소"
+    },
+    {
+      "name": "opr_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "운영기관명"
+    },
+    {
+      "name": "reg_dat",
+      "single_search": false,
+      "type": "",
+      "desc": "데이터기준일자"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

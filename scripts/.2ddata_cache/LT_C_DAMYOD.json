@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_DAMYOD",
+  "svc_ide": "damyod",
+  "name": "단지용도지역",
+  "cat": "단지용도지역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "용도분류명"
+    },
+    {
+      "name": "dan_name",
+      "single_search": false,
+      "type": "",
+      "desc": "단지명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

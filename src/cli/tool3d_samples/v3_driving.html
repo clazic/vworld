@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Drive</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+ <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+  <table id="DRIVE_TABLE" style="display: block;">
+    <tr>
+      <td><input type="button" onclick="startDrive()" value="주행시작"></td>
+      <td><input type="button" onclick="stopDrive()" value="주행정지"></td>
+    </tr>
+    <tr>
+      <td><input type="button" onclick="driveControl('speed',10)" value="가속"></td>
+      <td><input type="button" onclick="driveControl('speed',-10)" value="감속"></td>
+    </tr>      
+    <tr>
+      <td><input type="button" onclick="driveControl('heading',10)" value="왼쪽회전"></td>
+      <td><input type="button" onclick="driveControl('heading',-10)" value="오른쪽회전"></td>
+    </tr>
+  </table>
+<script>
+
+    var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.79071928185927, 37.56074342381346, 5000.0),  
+						new vw.Direction(0, -60, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+	var map = new vw.Map();
+	map.setOption( options );			
+	map.start();
+			
+    var drive;
+    function startDrive()
+    {
+      if(drive == null){
+        drive = new vw.cameraAction.Drive();
+      }
+        drive.start();
+    }
+
+    function stopDrive()
+    {
+        if(drive != null)
+        {
+            drive.stop();
+        }
+    }
+  
+    function driveControl(flag, val){
+      switch(flag){
+        case 'speed' :
+          val = drive.getSpeed() + val;
+          drive.setSpeed(val);
+          break;
+        case 'heading' :
+          drive.setHeadingSpeed(val);
+          break;
+      }
+    }
+    
+</script>
+</body>
+</html>

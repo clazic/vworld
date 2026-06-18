@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISMOAC",
+  "svc_ide": "aismoac",
+  "name": "군작전구역",
+  "cat": "군작전구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "moa_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "군작전구역라벨1"
+    },
+    {
+      "name": "moa_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "군작전구역라벨2"
+    },
+    {
+      "name": "moa_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "군작전구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

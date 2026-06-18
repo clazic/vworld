@@ -1,0 +1,45 @@
+{
+  "data_id": "LT_P_MOCTNODE",
+  "svc_ide": "moctnode",
+  "name": "교통노드",
+  "cat": "교통노드",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "node_id",
+      "single_search": false,
+      "type": "",
+      "desc": "노드ID"
+    },
+    {
+      "name": "node_name",
+      "single_search": false,
+      "type": "",
+      "desc": "노드명"
+    },
+    {
+      "name": "nd_type_h",
+      "single_search": false,
+      "type": "",
+      "desc": "노드유형"
+    },
+    {
+      "name": "turn_type",
+      "single_search": false,
+      "type": "",
+      "desc": "회전제한유형"
+    },
+    {
+      "name": "remark",
+      "single_search": false,
+      "type": "",
+      "desc": "비고"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

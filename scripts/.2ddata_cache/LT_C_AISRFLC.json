@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISRFLC",
+  "svc_ide": "aisrflc",
+  "name": "공중급유구역",
+  "cat": "공중급유구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "rfl_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "공중급유구역라벨1"
+    },
+    {
+      "name": "rfl_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "공중급유구역라벨2"
+    },
+    {
+      "name": "rfl_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "공중급유구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

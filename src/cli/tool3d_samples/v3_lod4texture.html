@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+ 	<title>Custom Shader</title>
+	<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+	
+	<script type="text/javascript" src="https://map.vworld.kr/js/dtkmap/tool3d/lib/CustomShaderHelper.esm.js"></script>
+    
+	<style type="text/css">
+<!--
+input[type="button"] {width:200px;height:30px;margin-top:10px;}
+input[type="button"].on {background-color:#00ffff;color:black;border:none;}
+div[id="msg"] {position:absolute;width:100%;height:25px;left:5px;top:5px;right:5px;z-index:0;color:lime;background-color:black;opacity:0.5;}
+-->
+</style>
+ </head>
+
+<body><div id="msg"></div>
+<div id="vmap" style="width:100%;height:330px;left:0px;top:0px">
+</div>
+
+<center>
+<input id="3dmesh_01" type="button" class="btn" value="Custom Shader" onclick="javascript:_setCustomShader('facility_build');setOn(this.id);"/>
+<input id="hideSurface_01" type="button" class="btn" value="지면끄기" onclick="javascript:_hideSurface();setOn(this.id);"/>
+</div>
+<script>
+let defined = Cesium.defined;
+let HeightReference = Cesium.HeightReference;
+let defaultValue = Cesium.defaultValue;
+
+    var map;
+
+    function vwmap() {    
+        vw.ws3dInitCallBack = function() {
+    	    map.getLayerElement("명칭").hide();
+    	    
+        }; 
+        var mapOptions = {
+        	mapId : "vmap",
+        	initPosition : new vw.CameraPosition(
+        			new vw.CoordZ(126.63971 , 37.39667, 1000),
+                    new vw.Direction(0, -90, 0)
+                ),
+            logo : false,
+            navigation : true
+        };
+
+        map = new vw.Map();
+        map.setOption( mapOptions );
+        map.start();
+        
+        var currentPositionHandler = function () {
+        	var curPos = map.getCurrentPosition();
+        	console.log( "curPos :" , curPos);
+        }
+        var buildingInfoEvent = function(windowPosition, ecefPosition, cartographic, featureInfo) {
+        	ws3d.viewer.map.clearAllHighlightedFeatures();
+      	 _showMessage();
+          
+          //test
+          const pickedFeature = ws3d.viewer.scene.pick(windowPosition);
+          if (!defined(pickedFeature)) return;
+          
+          if (featureInfo) {
+              var mapElement = featureInfo.element;
+              var attributes = featureInfo.attributes;		// 건물 속성 정보.
+              if (attributes && mapElement) {
+  	            console.log("속성 :" , attributes);
+  	          }
+          }
+          
+          if (selected.feature === pickedFeature){
+            selected.feature.content._model.color= selected.originalColor;
+            return;
+          }
+          if (defined(selected.feature)){
+              if (defined(selected.feature.content) && selected.feature.content.isDestroyed()== false){
+                selected.feature.content._model.colorBlendMode=0;
+                selected.feature.content._model.color= selected.originalColor;
+              }
+          }
+          var urls = pickedFeature.content._resource._url.split('/');
+        	_showMessage("h: " + cartographic.height.toFixed(2)
+        	  +  ",lat : "+  cartographic.latitudeDD.toFixed(4)
+        	  +  ",lon : "+  cartographic.longitudeDD.toFixed(4)
+        	  +  ",picked : " +  urls[urls.length-1]);
+        	
+          
+          selected.feature = pickedFeature;
+          if (pickedFeature === highlighted.feature){
+            Cesium.Color.clone(highlighted.originalColor, selected.originalColor);
+            highlighted.feature = undefined;
+          } else {
+            Cesium.Color.clone(pickedFeature.content._model.color,selected.originalColor);
+            Cesium.Color.clone(pickedFeature.content._model.color,highlighted.originalColor);
+            highlighted.feature = pickedFeature;
+            pickedFeature.content._model.colorBlendMode=2;
+            pickedFeature.content._model.color=Cesium.Color.LIME;//Cesium.Color.RED;
+            
+          }
+          
+        };
+        ws3d.viewer.map.onPickingElement.addEventListener( buildingInfoEvent );
+    }
+	
+    vwmap();
+    function _hideSurface(){
+      var _state = ws3d.viewer.scene.globe.show;
+      ws3d.viewer.scene.globe.show = !_state;
+      ws3d.viewer.scene.skyAtmosphere.show = !_state;
+      ws3d.viewer.scene.skyBox.show = !_state;
+    }
+    function setOn(id){
+      if ($("#"+id).hasClass("on")){
+          $("#"+id).removeClass("on");
+          return;
+      } else {
+        $("#"+id).addClass("on");
+      }
+    }
+    
+
+  function _showUrl(){
+    if (threedLayerElementInstance !== undefined) {
+      var _state = threedLayerElementInstance._tileset.debugShowUrl;
+      threedLayerElementInstance._tileset.debugShowUrl = !_state;
+    }
+  }
+  
+const selected = {
+  feature: undefined,
+  originalColor : new Cesium.Color(),
+};
+
+const highlighted = {
+  feature: undefined,
+  originalColor : new Cesium.Color(),
+};
+
+function _showMessage(message){
+  const msgDiv = document.querySelector("div[id=msg]");
+  msgDiv.style.zIndex = 0;
+  
+  if (!defined(message) ||  message.trim() == '') {
+    msgDiv.hidden = true;
+    return;
+  }
+  msgDiv.innerText = message.trim();
+  msgDiv.hidden = false;
+  msgDiv.style.zIndex = 999;
+  
+}
+
+function _setCustomShader(layerid){
+// -----------------------------------------------------------------------------------------------------------------------
+// CustomShaderHelper 라는 class 로 커스텀 세이더를 다루기 위한 도움 클래스를 작성했습니다. 
+// 해당 내용을 아래와 같은 방법으로 사용하시면 되겠습니다.
+// -----------------------------------------------------------------------------------------------------------------------
+
+
+  // 현재 환경에서 커스텀 세이더 적용할 대상 3D타일레이어 앨리먼트 가져오기 & 앨리먼트가 가지고 있는 실제 tileset 가져오기
+  const targetTileLayer = ws3d.viewer.map.getElementById(layerid); // lod4
+  
+  if (targetTileLayer !== undefined) {
+    if ((targetTileLayer._tileset.customShader !== undefined) && 
+    (targetTileLayer._tileset.customShader !== null)) {
+      ws3d.viewer.setting.useSunLighting = false;
+      CustomShaderHelper.clear3DTileLayerCustomShader(targetTileLayer);
+      return;
+    }
+  }
+
+  // 색상을 매개변수로 커스텀 세이더 적용하기
+  CustomShaderHelper.apply3DTileLayerCustomShaderAsync(targetTileLayer, function(){
+     const color = Cesium.Color.fromCssColorString("#FEFEFE"); //"#37474F"
+     return CustomShaderHelper.createRuntimeNormalColorCustomShader(color);
+  });
+
+  // 태양광원 활성화 ( 현재 시간 태양을 광원으로 사용됨 )
+   ws3d.viewer.setting.useSunLighting = true
+
+  // 기 적용된 커스텀 세이더 해제
+  // CustomShaderHelper.clear3DTileLayerCustomShader(targetTileLayer);
+}    
+</script>
+</body>
+</html>

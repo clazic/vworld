@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Circle,CircleZ</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+    <div id="vmap" style="width:98%;height:350px;left:0px;top:0px"></div>
+
+    Circle : <input type="button" onclick="createCircle()" value="Circle생성">&nbsp;&nbsp;
+    <input type="button" onclick="redrawCircle()" value="재생성">&nbsp;&nbsp;
+    <input type="button" onclick="removeCircle()" value="제거">&nbsp;&nbsp;
+
+    CircleZ : <input type="button" onclick="createCircleZ()" value="CircleZ생성">&nbsp;&nbsp;
+    <input type="button" onclick="redrawCircleZ()" value="재생성">&nbsp;&nbsp;
+    <input type="button" onclick="removeCircleZ()" value="제거">
+    <script>
+        var map;
+
+        /* begin -------- 맵 초기화 코드 --------- */
+        function vwmap() {
+
+            var options = {
+                mapId: "vmap",
+                initPosition: new vw.CameraPosition(
+                    new vw.CoordZ(126.965007, 37.6, 62300),
+                    new vw.Direction(0, -90, 0)
+                ),
+                logo: true,
+                navigation: true
+            };
+
+            map = new vw.Map();
+            map.setOption(options);
+            map.start();
+
+        }
+        /* end -------- 맵 초기화 코드 --------- */
+
+
+        /* begin -------- html document ready 콜백 등록 --------- */
+        if (document.readyState === "complete" || (document.readyState !== "loading" && !document.documentElement.doScroll)) {
+            onDomReady();
+        } else {
+            document.addEventListener("DOMContentLoaded", onDomReady);
+        }
+        /* end  -------- html document ready 콜백 등록 --------- */
+
+        function onDomReady() {
+            vwmap(); //페이지 로드 완료 후 맵초기화호출
+        }
+
+        function createCircle() {
+            var coord = new vw.Coord(126.921883, 37.524370);
+            var circle = new vw.geom.Circle(coord, 1000);
+            circle.setId("test01");
+            circle.setFillColor(vw.Color.RED);
+            circle.create();
+        }
+
+        function redrawCircle() {
+            var Obj = map.getObjectById("test01");
+            if (Obj != null) {
+                var coord = new vw.Coord(126.921803, 37.524870);
+                var radius = 2000;
+                Obj.setCenter(coord);
+                Obj.setRadius(radius);
+                Obj.setFillColor(vw.Color.BLUE);
+                Obj.redraw();
+            }
+        }
+
+        function removeCircle() {
+            map.removeObjectById("test01");
+        }
+
+        function createCircleZ() {
+            var coordz = new vw.CoordZ(126.925883, 37.5263701234, 100);
+            var circlez = new vw.geom.CircleZ(coordz, 1000);
+            circlez.setId("test02");
+            circlez.setFillColor(vw.Color.ORANGE);
+            circlez.setExtrudeHeight(50);
+            circlez.create();
+        }
+
+        function redrawCircleZ() {
+            var Obj = map.getObjectById("test02");
+            if (Obj != null) {
+                var coordz = new vw.CoordZ(126.925883, 37.5263701234, 200);
+                var radius = 500;
+                Obj.setCenter(coordz);
+                Obj.setRadius(radius);
+                Obj.setFillColor(vw.Color.CYAN);
+                Obj.redraw();
+            }
+        }
+
+        function removeCircleZ() {
+            map.removeObjectById("test02");
+        }
+    </script>
+</body>
+
+</html>

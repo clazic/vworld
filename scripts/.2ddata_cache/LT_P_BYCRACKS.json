@@ -1,0 +1,81 @@
+{
+  "data_id": "LT_P_BYCRACKS",
+  "svc_ide": "bycracks",
+  "name": "자전거보관소",
+  "cat": "자전거보관소",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "rak_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "자전거보관소명"
+    },
+    {
+      "name": "rak_addr",
+      "single_search": false,
+      "type": "",
+      "desc": "소재지도로"
+    },
+    {
+      "name": "jibun_addr",
+      "single_search": false,
+      "type": "",
+      "desc": "지번주소"
+    },
+    {
+      "name": "byc_cnt",
+      "single_search": false,
+      "type": "",
+      "desc": "자전거보관대수"
+    },
+    {
+      "name": "rak_typ",
+      "single_search": false,
+      "type": "",
+      "desc": "설치형태"
+    },
+    {
+      "name": "flag_yn",
+      "single_search": false,
+      "type": "",
+      "desc": "차양막설치여부"
+    },
+    {
+      "name": "pump_yn",
+      "single_search": false,
+      "type": "",
+      "desc": "공기주입기설치여부"
+    },
+    {
+      "name": "pump_typ",
+      "single_search": false,
+      "type": "",
+      "desc": "공기주입기형태"
+    },
+    {
+      "name": "fix_yn",
+      "single_search": false,
+      "type": "",
+      "desc": "수리대설치여부"
+    },
+    {
+      "name": "org_tel",
+      "single_search": false,
+      "type": "",
+      "desc": "관리기관연락처"
+    },
+    {
+      "name": "org_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "원본파일명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

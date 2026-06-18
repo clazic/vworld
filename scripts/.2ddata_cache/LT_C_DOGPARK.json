@@ -1,0 +1,81 @@
+{
+  "data_id": "LT_C_DOGPARK",
+  "svc_ide": "dogpark",
+  "name": "반려견놀이터",
+  "cat": "반려견놀이터",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "sd_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sgg_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "park_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "반려견 놀이터명"
+    },
+    {
+      "name": "oper_tm",
+      "single_search": false,
+      "type": "",
+      "desc": "운영시간"
+    },
+    {
+      "name": "hldy",
+      "single_search": false,
+      "type": "",
+      "desc": "휴무일"
+    },
+    {
+      "name": "fcs",
+      "single_search": false,
+      "type": "",
+      "desc": "시설현황"
+    },
+    {
+      "name": "fcar",
+      "single_search": false,
+      "type": "",
+      "desc": "면적"
+    },
+    {
+      "name": "oper_inst",
+      "single_search": false,
+      "type": "",
+      "desc": "운영기관"
+    },
+    {
+      "name": "telno",
+      "single_search": false,
+      "type": "",
+      "desc": "전화번호"
+    },
+    {
+      "name": "addr",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "use_amt",
+      "single_search": false,
+      "type": "",
+      "desc": "이용요금"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

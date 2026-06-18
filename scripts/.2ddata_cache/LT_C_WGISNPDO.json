@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_C_WGISNPDO",
+  "svc_ide": "wgisnpdo",
+  "name": "도립자연공원",
+  "cat": "도립자연공원",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "park_name",
+      "single_search": false,
+      "type": "",
+      "desc": "공원명칭"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

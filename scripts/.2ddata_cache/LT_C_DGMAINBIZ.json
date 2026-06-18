@@ -1,0 +1,45 @@
+{
+  "data_id": "LT_C_DGMAINBIZ",
+  "svc_ide": "dgmainbiz",
+  "name": "주요상권",
+  "cat": "주요상권",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "no",
+      "single_search": false,
+      "type": "",
+      "desc": "주요상권연번호"
+    },
+    {
+      "name": "nm",
+      "single_search": false,
+      "type": "",
+      "desc": "주요상권명"
+    },
+    {
+      "name": "sido",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sigg",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "fullnm",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

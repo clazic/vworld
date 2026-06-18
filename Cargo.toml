@@ -1,0 +1,33 @@
+[package]
+name = "vworld"
+version = "0.1.0"
+edition = "2021"
+description = "VWorld OpenAPI CLI — 자기완결 단일 바이너리 (kosis 동시성 패턴 차용)"
+license = "MIT"
+
+[[bin]]
+name = "vworld"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "gzip"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+async-channel = "2"
+quick-xml = { version = "0.36", features = ["serialize"] }
+anyhow = "1"
+thiserror = "1"
+shapefile = "0.6"
+encoding_rs = "0.8"
+rusqlite = { version = "0.31", features = ["bundled"] }
+calamine = "0.26"
+
+[dev-dependencies]
+mockito = "1"
+
+[profile.release]
+strip = true
+lto = "thin"

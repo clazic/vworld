@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_L_GIMSDIREC",
+  "svc_ide": "gimsdirec",
+  "name": "지하수유동방향",
+  "cat": "지하수유동방향",
+  "geom": "Line",
+  "attrs": [
+    {
+      "name": "legend",
+      "single_search": false,
+      "type": "",
+      "desc": "범례"
+    },
+    {
+      "name": "regn_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "지역코드"
+    },
+    {
+      "name": "sig_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

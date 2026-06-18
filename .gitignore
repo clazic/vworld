@@ -1,0 +1,37 @@
+# 민감정보 — API 키 설정파일 (커밋 금지)
+config.toml
+**/config.toml
+skills/app/config.toml
+skills/app/config.toml.local-backup
+**/config.toml.local-backup
+scripts/.env
+.env
+
+# 실제 API 키가 박힌 작업 산출물·세션·캐시·데모 (커밋 절대 금지)
+.vw_demo/
+.vw_*/
+**/.omc/
+.omc/
+.playwright-mcp/
+*.zip
+
+# Rust 빌드 산출물
+/target
+**/*.rs.bk
+Cargo.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 대용량 데이터·경계 (직접 적재 — skills/data/ 하위, opt-in 자원)
+*.sqlite
+*.shp
+skills/data/*.sqlite
+skills/data/*.shp
+
+# 생성 산출물(HTML 지도) — 실제 키가 박힐 수 있어 제외
+skills/output/
+
+# docker 크로스빌드 캐시
+.docker-cargo/

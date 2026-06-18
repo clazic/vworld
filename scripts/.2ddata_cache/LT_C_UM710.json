@@ -1,0 +1,105 @@
+{
+  "data_id": "LT_C_UM710",
+  "svc_ide": "um710",
+  "name": "상수원보호",
+  "cat": "상수원보호",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "mnum",
+      "single_search": false,
+      "type": "",
+      "desc": "관리번호"
+    },
+    {
+      "name": "remark",
+      "single_search": false,
+      "type": "",
+      "desc": "메모"
+    },
+    {
+      "name": "alias",
+      "single_search": false,
+      "type": "",
+      "desc": "별칭"
+    },
+    {
+      "name": "std_sggcd",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구코드"
+    },
+    {
+      "name": "admin_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "관리기관코드"
+    },
+    {
+      "name": "sido_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "시도코드"
+    },
+    {
+      "name": "sigungu_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구코드"
+    },
+    {
+      "name": "dyear",
+      "single_search": false,
+      "type": "",
+      "desc": "고시년도"
+    },
+    {
+      "name": "dnum",
+      "single_search": false,
+      "type": "",
+      "desc": "고시번호"
+    },
+    {
+      "name": "ucode",
+      "single_search": false,
+      "type": "",
+      "desc": "용도코드"
+    },
+    {
+      "name": "bon_bun",
+      "single_search": false,
+      "type": "",
+      "desc": "본번"
+    },
+    {
+      "name": "bu_bun",
+      "single_search": false,
+      "type": "",
+      "desc": "부번"
+    },
+    {
+      "name": "sido_name",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sigg_name",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "uname",
+      "single_search": false,
+      "type": "",
+      "desc": "용도지역명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "지오메트리"
+    }
+  ]
+}

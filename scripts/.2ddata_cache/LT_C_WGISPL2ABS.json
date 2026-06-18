@@ -1,0 +1,45 @@
+{
+  "data_id": "LT_C_WGISPL2ABS",
+  "svc_ide": "wgispl2abs",
+  "name": "(2차) 보전연안해역",
+  "cat": "",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "rd_key",
+      "single_search": false,
+      "type": "",
+      "desc": "지역계획분류"
+    },
+    {
+      "name": "landsea",
+      "single_search": false,
+      "type": "",
+      "desc": "구분"
+    },
+    {
+      "name": "area",
+      "single_search": false,
+      "type": "",
+      "desc": "면적"
+    },
+    {
+      "name": "region",
+      "single_search": false,
+      "type": "",
+      "desc": "지역명"
+    },
+    {
+      "name": "project",
+      "single_search": false,
+      "type": "",
+      "desc": "주체"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

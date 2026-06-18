@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_P_SGISGWCHG",
+  "svc_ide": "sgisgwchg",
+  "name": "지하수측정망(오염우려지역)",
+  "cat": "지하수측정망",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "code",
+      "single_search": false,
+      "type": "",
+      "desc": "관리코드"
+    },
+    {
+      "name": "addr",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "cyongdo",
+      "single_search": false,
+      "type": "",
+      "desc": "용도코드"
+    },
+    {
+      "name": "cdrink",
+      "single_search": false,
+      "type": "",
+      "desc": "음용여부코드"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISALTC",
+  "svc_ide": "aisaltc",
+  "name": "경계구역",
+  "cat": "경계구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "alt_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "경계구역라벨1"
+    },
+    {
+      "name": "alt_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "경계구역라벨2"
+    },
+    {
+      "name": "alt_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "경계구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

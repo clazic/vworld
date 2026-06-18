@@ -1,0 +1,21 @@
+{
+  "data_id": "LT_P_AISCORRID_GJ",
+  "svc_ide": "aiscorridgjp",
+  "name": "중지도회랑지점",
+  "cat": "중지도회랑지점",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "nm",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

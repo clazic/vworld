@@ -1,0 +1,63 @@
+{
+  "data_id": "LT_C_TFISMPA",
+  "svc_ide": "tfismpa",
+  "name": "해양보호구역",
+  "cat": "해양보호구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "mpa_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "보호구역명칭"
+    },
+    {
+      "name": "gos_num",
+      "single_search": false,
+      "type": "",
+      "desc": "고시번호"
+    },
+    {
+      "name": "gos_dat",
+      "single_search": false,
+      "type": "",
+      "desc": "고시일자"
+    },
+    {
+      "name": "law",
+      "single_search": false,
+      "type": "",
+      "desc": "적용법률"
+    },
+    {
+      "name": "mng_org",
+      "single_search": false,
+      "type": "",
+      "desc": "관리기관1"
+    },
+    {
+      "name": "loc",
+      "single_search": false,
+      "type": "",
+      "desc": "주소"
+    },
+    {
+      "name": "ara_siz",
+      "single_search": false,
+      "type": "",
+      "desc": "규모"
+    },
+    {
+      "name": "mng_ogr",
+      "single_search": false,
+      "type": "",
+      "desc": "관리기관"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

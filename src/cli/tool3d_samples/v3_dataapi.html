@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<title>addObject(DATAAPI)</title>
+	<script type="text/javascript"
+		src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+
+	<div id="vmap" style="width:100%;height:370px;left:0px;top:0px"></div>
+
+	<form id="dataForm">
+		<input type="hidden" name="key" value="@{apikey}">
+		<input type="hidden" name="domain" value="http://map.vworld.kr">
+		<input type="hidden" name="service" value="data">
+		<input type="hidden" name="version" value="2.0">
+		<input type="hidden" name="request" value="getfeature">
+		<input type="hidden" name="format" value="json">
+		<input type="hidden" name="size" value="10">
+		<input type="hidden" name="page" value="1">
+		<input type="hidden" name="data" value="LT_C_ADEMD_INFO">
+		<!--광역시도 코드 값으로 경기도 지역 데이터 API 조회  -->
+		<input type="hidden" name="geometry" value="true">
+		<input type="hidden" name="attribute" value="true">
+		<input type="hidden" name="crs" value="EPSG:4326">
+	</form>
+
+	<script>
+
+		var options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(128.4695839113839,38.44010946298372, 2416),
+                new vw.Direction(0, -90, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+        var map = new vw.Map();
+        map.setOption(options);
+        map.start();
+		
+		vw.ws3dInitCallBack = function() {
+			$.ajax({
+				type: "get",
+				url: "https://api.vworld.kr/req/data?geomFilter=POINT(128.462804404302%2038.45242542468921)",
+				data: $('#dataForm').serialize(),
+				dataType: 'jsonp',
+				async: false,
+				success: function (data) {
+					let ar1 = new Array();
+					let ar2 = new Array();
+					data.response.result.featureCollection.features[0].geometry.coordinates[0][0].forEach(function(i){
+						ar1.push(new vw.Coord(i[0], i[1]));
+					})
+					data.response.result.featureCollection.features[0].geometry.coordinates[1][0].forEach(function(i){
+						ar2.push(new vw.Coord(i[0], i[1]));
+					})
+
+					var coordCol1 = new vw.Collection(ar1);
+					line = new vw.geom.LineString(coordCol1);
+					line.setFillColor(vw.Color.BLUE);
+					line.setWidth(10);
+					line.setName("라인");
+					line.create();
+
+					var coordCol2 = new vw.Collection(ar2);
+					polygon = new vw.geom.Polygon(coordCol2);
+					polygon.setFillColor(new vw.Color(255, 0, 0, 70));
+					polygon.setWidth(1);
+					polygon.setName("폴리곤");
+					polygon.create();
+				},
+
+
+				error: function (xhr, stat, err) {
+				}
+			});
+
+		}
+
+
+	</script>
+</body>
+
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ViewSurface</title>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+
+<!-- vwMap -->
+<!--<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=A8A79D9E-3B7A-31F2-8288-637A5F984B7C"></script>-->
+<!-- 시곡면 분석 JS 추가 -->
+<script src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/viewSurface/ViewSurface_api.js"></script><!-- 운영 -->
+<!--<script src="http://localhost:8082/js/dtkmap/tool3d/libapis/viewSurface/ViewSurface_api.js"></script><!-- 로컬 -->
+
+</head>
+
+<body>
+<div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+<label for="area">경사각 </label>
+    <input type="number" id="slopeAngle" value="12" step="1" /><br>
+<label for="area">시곡각 </label>
+    <input type="number" id="viewAngle" value="30" step="1" /><br>
+
+<div class="btns">
+				<button type="button" class="bt bg primary" id="btn_selectAnalysisPoint">지점선택</button>
+				<button type="button" class="bt bg primary" id="btn_analyzeViewSurface">분석실행</button>
+				<button type="button" class="bt bg" id="btn_removeViewSurface">초기화</button>
+</div>
+<div id="viewerContainerWrapper">
+    <div id="viewerContainer"></div>
+    <div id="subContainerToggle"><button></button></div>
+</div>
+<div id="subContainer">
+
+    <div class="row">
+        <div class="col-md-3" style="display: block; box-sizing: border-box; height: 184px; width: 369px;">
+          <canvas id="profileChartApi"></canvas>
+        </div>
+        <div class="col-md-3" style="height: 180px; overflow-y: scroll">
+          <table class="table table-hover">
+            <tbody id="vsResultTable">
+            </tbody>
+          </table>
+        </div>
+    </div>
+</div>
+
+<script>
+
+function vwmap(){
+
+	var options =   {
+			mapId : "vmap",
+			initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+                new vw.Direction(0, -90, 0)
+            ),
+			logo: true,
+			navigation: false
+		};
+
+		var map = new vw.Map();
+		map.setOption( options );
+		map.start();
+  }
+  vwmap();
+
+  let viewSurface = null; // 시곡면 분석 객체
+  let profileLineEntity; // 단면분석 결과 라인 Entity 객체
+  let chart_profile; // 종단면 차트 객체
+
+//지점선택 버튼 클릭
+  document.querySelector("#btn_selectAnalysisPoint").addEventListener("click", function() {
+    const slopeAngle = document.getElementById("slopeAngle").value; // 경사각
+    const viewAngle = document.getElementById("viewAngle").value; // 시곡각
+    const color = '#FFEE44'; // 분석결과색상
+    if(!viewSurface) {
+      viewSurface = new ViewSurface('viewSurface1', 'viewSurface1', {
+        maxFarValue: 1000, // 분석 최대 거리 설정
+        maxSlopeAngle: 40, // 최대 경사각 제한
+        maxViewAngle: 60, // 최대 시곡각 제한
+        viewAngleInterval: 0.5, // 시곡각에서 분석지점 생성 간격 설정 (디그리)
+        analyzedLineOptions: { // 분석결과 라인 옵션 설정
+          lineWidth: 15, // 라인 굵기
+          lineAlpha: 0.1, // 라인 색상 알파값
+        },
+      });
+      viewSurface.profileMarkerGroupId = "profileGroup_Marker";
+  	  viewSurface.resultTable = $('#vsResultTable');
+  	  viewSurface.profileChartApi = $('#profileChartApi');
+      viewSurface.selectAnalysisPoint(slopeAngle, viewAngle, color);
+    } else {
+      viewSurface.selectAnalysisPoint(slopeAngle, viewAngle, color);
+    }
+
+    viewSurface.resultTable.empty(); // 테이블 결과 초기화
+    ws3d.viewer.entities.remove(profileLineEntity);
+    // 이전 마커 삭제
+    ws3d.viewer.objectManager.removeGroupGeometries(viewSurface.profileMarkerGroupId);
+
+  });
+
+//시곡면 분석 버튼 클릭
+  document.querySelector("#btn_analyzeViewSurface").addEventListener("click", function() {
+    if(viewSurface) {
+
+      loadingWithMask();
+      $('#wsLoadingIndicator').css('display', 'block');
+
+      const viewSurfaceColor = $('#viewSurfaceColor').val(); // 분석결과색상
+
+      // 시곡면 분석 수행 (가시색상, 비가시색상 옵션)
+      viewSurface.analyzeViewSurface(
+        viewSurfaceColor,
+        viewSurfaceColor, // 비 가시 색상 옵션
+        (analysisResults) => { // 분석 완료 콜백 함수
+          closeLoadingWithMask();
+          $('#wsLoadingIndicator').css('display', 'none');
+
+          if(analysisResults) {
+            if(analysisResults) {
+            for (let i = 0; i < analysisResults.length; i++) {
+                const analysisResult = analysisResults[i];
+
+                if (analysisResult.angle === 15) {//조회하고자 하는 각도
+                	viewSurface.createViewSurfaceChartTable(analysisResult);
+                }
+            }
+          }
+          }
+        }
+      );
+
+    } else {
+      alert('시곡면 지점이 존재하지 않습니다.');
+    }
+  });
+
+//초기화 버튼 클릭
+  document.querySelector("#btn_removeViewSurface").addEventListener("click", function() {
+    if(viewSurface) {
+      viewSurface.initViewSurface();
+    }
+    // 차트 초기화
+    if(chart_profile !== undefined) {
+      chart_profile.destroy();
+    }
+
+    viewSurface.resultTable.empty(); // 테이블 결과 초기화
+    ws3d.viewer.entities.remove(profileLineEntity);
+    ws3d.viewer.objectManager.removeGroupGeometries(profileMarkerGroupId);
+  });
+
+  //유효값 : 경사각, 시곡각
+  var regex = /^-?(?:\d+|\d)(?:\.\d+)?$/; // 소수점 허용
+
+  $("#slopeAngle").on("focusout keyup", function(){
+		var v = $(this).val();
+		if(v.length > 0){
+			if(v < 1 || v > 40 || regex.test(v) == false){
+				alert('1~40 사이의 값을 입력하세요.','',function(){});
+				v = "";
+			}
+			$(this).val(v);
+			setTimeout(function(){$(this).focus();},1);
+		}
+	});
+
+	$("#viewAngle").on("focusout keyup", function(){
+		var v = $(this).val();
+		if(v.length > 0){
+			if(v < 1 || v > 60 || regex.test(v) == false){
+				alert('1~60 사이의 값을 입력하세요.','',function(){});
+				v = "";
+			}
+			$(this).val(v);
+			setTimeout(function(){$(this).focus();},1);
+		}
+	});
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_WGISIEDOSI",
+  "svc_ide": "wgisiedosi",
+  "name": "첨단산업단지",
+  "cat": "첨단산업단지",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "e_name",
+      "single_search": false,
+      "type": "",
+      "desc": "명칭"
+    },
+    {
+      "name": "e_code",
+      "single_search": false,
+      "type": "",
+      "desc": "단지번호"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

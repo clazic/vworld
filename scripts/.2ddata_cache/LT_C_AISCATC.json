@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_AISCATC",
+  "svc_ide": "aiscatc",
+  "name": "훈련구역",
+  "cat": "훈련구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "cat_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "훈련구역라벨1"
+    },
+    {
+      "name": "cat_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "훈련구역라벨2"
+    },
+    {
+      "name": "cat_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "훈련구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

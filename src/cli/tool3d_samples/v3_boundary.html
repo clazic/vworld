@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ExtentBoundary</title>
+	<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+<div id="vmap" style="width:99%;height:340px;left:0px;top:0px"></div>
+Extent:
+<p id="cdata_code"></p>
+
+<script>
+
+    var map;
+
+    /* begin -------- 맵 초기화 코드 --------- */
+    function vwmap() {
+    	var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.921883, 37.524370, 2400),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+			map = new vw.Map();
+			map.setOption( options );			
+			map.start();
+			
+    	var test01 = function() {
+        	var viewRect = ws3d.viewer.scene.camera.computeViewRectangle();
+        	var _html = "";
+			var West = ws3d.common.CesiumMath.toDegrees(viewRect.west).toFixed(7) //long min
+			var South = ws3d.common.CesiumMath.toDegrees(viewRect.south).toFixed(7) //lan min
+			var East = ws3d.common.CesiumMath.toDegrees(viewRect.east).toFixed(7) //long max
+			var North = ws3d.common.CesiumMath.toDegrees(viewRect.north).toFixed(7) //lan max
+			
+			position = map.getCurrentPosition().position
+			var z = position.z
+
+			makeLine(West,South,East,North,z);
+
+_html = ` West:${West} 
+                South:${South}  
+                East:${East} 
+                North:${North} `;
+        	$("#cdata_code").html(_html);
+    	}
+    	vw.EventProcess.add( "test01", map.onMoveEnd, test01 );
+    }
+    
+
+	/*
+		이벤트를 주는 방법 확인, 레퍼런스 추가
+
+		map.{?}.addEventListener // onClick ?  
+		bound, unbound 방법 
+
+		vw.EventProcess.add( "test01", map.onMoveEnd, test01 );
+		bound, unbound 방법 
+		map.onMoveEnd 등 이벤트의 종류, 관련 레퍼런스 추가
+
+	*/
+
+
+
+	//데이터 조회 영역 확인 
+	var makeLine = function(x1,y1,x2,y2,z){
+		let ar = new Array();
+		ar.push(new vw.Coord(x1, y1));
+		ar.push(new vw.Coord(x1, y2));
+		ar.push(new vw.Coord(x2, y2));
+		ar.push(new vw.Coord(x2, y1));
+		ar.push(new vw.Coord(x1, y1));		
+		var coordCol = new vw.Collection(ar);
+		linestring = new vw.geom.LineString(coordCol);
+		linestring.setFillColor(vw.Color.CYAN);
+		linestring.setWidth(z/500);
+		linestring.setName("라인");
+		linestring.create();
+	}
+	
+    /* end -------- 맵 초기화 코드 --------- */
+
+
+    /* begin -------- html document ready 콜백 등록 --------- */
+    if (document.readyState === "complete" || (document.readyState !== "loading" && !document.documentElement.doScroll)) {
+        onDomReady();
+    } else {
+        document.addEventListener("DOMContentLoaded", onDomReady);
+    }
+    /* end  -------- html document ready 콜백 등록 --------- */
+
+    function onDomReady() {
+        vwmap(); //페이지 로드 완료 후 맵초기화호출
+    }
+
+</script>
+</body>
+</html>

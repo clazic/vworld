@@ -1,0 +1,75 @@
+{
+  "data_id": "LT_C_SPBD",
+  "svc_ide": "spbd",
+  "name": "도로명주소 건물",
+  "cat": "도로명주소",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "bd_mgt_sn",
+      "single_search": true,
+      "type": "",
+      "desc": "건물관리번호\r\n- 생성 당시 기준의 PNU + 연번으로 구성되었으며 이후 행정구역이 변동되어도 관리번호는 반영이 안됨\r\n- 변경되지 않는 고유값"
+    },
+    {
+      "name": "buld_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "건물명칭"
+    },
+    {
+      "name": "bul_eng_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "건물영문명칭"
+    },
+    {
+      "name": "gro_flo_co",
+      "single_search": false,
+      "type": "",
+      "desc": "건물층수(지상)"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    },
+    {
+      "name": "buld_nm_dc",
+      "single_search": false,
+      "type": "",
+      "desc": "건물부명칭"
+    },
+    {
+      "name": "sido",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sigungu",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "rd_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "도로명"
+    },
+    {
+      "name": "buld_no",
+      "single_search": false,
+      "type": "",
+      "desc": "건물번호"
+    },
+    {
+      "name": "gu",
+      "single_search": false,
+      "type": "",
+      "desc": "읍면명칭"
+    }
+  ]
+}

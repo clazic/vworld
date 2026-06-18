@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Fly</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+    <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+    <table id="FLY_TABLE" style="display:block">
+        <tr>
+            <td><input type="button" onclick="startFly()" value="비행시작"></td>
+            <td></td>
+            <td><input type="button" onclick="stopFly()" value="비행정지"></td>
+        </tr>
+        <tr>
+            <td><input type="button" onclick="flyControl('speed',100)" value="가속"></td>
+            <td><input type="button" onclick="flyControl('speed',0)" value="정지"></td>
+            <td><input type="button" onclick="flyControl('speed',-100)" value="감속"></td>
+        </tr>
+        <tr>
+            <td><input type="button" onclick="flyControl('heading',100)" value="왼쪽회전"></td>
+            <td><input type="button" onclick="flyControl('heading',0)" value="가운데"></td>
+            <td><input type="button" onclick="flyControl('heading',-100)" value="오른쪽회전"></td>
+        </tr>
+        <tr>
+            <td><input type="button" onclick="flyControl('tilt',100)" value="피치업"></td>
+            <td><input type="button" onclick="flyControl('tilt',0)" value="가운데"></td>
+            <td><input type="button" onclick="flyControl('tilt',-100)" value="피치다운"></td>
+        </tr>
+        <tr>
+            <td><input type="button" onclick="flyControl('roll',100)" value="롤 왼쪽"></td>
+            <td><input type="button" onclick="flyControl('roll',0)" value="가운데"></td>
+            <td><input type="button" onclick="flyControl('roll',-100)" value="롤 오른쪽"></td>
+        </tr>
+    </table>
+    <script>
+        var options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(126.79071928185927, 37.56074342381346, 5000),
+                new vw.Direction(0, -60, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+        var map = new vw.Map();
+        map.setOption(options);
+        map.start();
+
+        var fly = null;
+
+        function startFly() {
+            isCameraAnimation = true;
+
+            fly = new vw.cameraAction.Fly();
+            fly.setSpeed(100);
+            fly.start();
+        }
+
+        function stopFly() {
+            if (isCameraAnimation) {
+                fly.stop();
+
+                isCameraAnimation = false;
+            }
+        }
+
+        function flyControl(flag, val) {
+            if (isCameraAnimation) {
+                switch (flag) {
+                    case 'speed':
+                        fly.setSpeed(val == 0 ? val : fly.getSpeed() + val);
+                        break;
+                    case 'heading':
+                        fly.setHeadingSpeed(val == 0 ? val : fly.getHeadingSpeed() + val);
+                        break;
+                    case 'tilt':
+                        fly.setTiltSpeed(val == 0 ? val : fly.getTiltSpeed() + val);
+                        break;
+                    case 'roll':
+                        fly.setRollSpeed(val == 0 ? val : fly.getRollSpeed() + val);
+                        break;
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>geojson/json/xml 파서 기능 테스트</title>
+
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>	
+</head>
+
+<body>
+<div id="vmap" style="width:99%;height:300px;left:0px;top:0px"></div>
+<div id="features">
+
+</div>
+<center>
+<h3>geojson/json/xml :</h3>
+<input type="button" value="geojson" onclick="javascript:geojson();"/>&nbsp;&nbsp;
+<input type="button" value="geoxml" onclick="javascript:geoxml();"/>&nbsp;&nbsp;
+</center>
+
+<script>
+
+    var map;
+
+    /* begin -------- 맵 초기화 코드 --------- */
+    function vwmap() {
+		var options =   {
+				mapId : "vmap",
+				initPosition: 	new vw.CameraPosition(
+						new vw.CoordZ(126.921883, 37.524370, 482400),  
+						new vw.Direction(0, -90, 0)
+					),		
+				logo: true,
+				navigation: true
+			};
+
+		map = new vw.Map();
+		map.setOption( options );			
+		map.start();
+			
+    }
+    
+    // 웹지엘 지도 호출.
+    vwmap(); 
+
+    /* end -------- 맵 초기화 코드 --------- */
+
+
+
+	function geojson() {
+		
+    	var url = "https://map.vworld.kr/proxy.do?url=http%3A%2F%2Fapi.vworld.kr%2Freq%2Fwfs%3Fkey%3D@{apikey}%26SERVICE%3DWFS%26version%3D1.1.0%26request%3DGetFeature%26TYPENAME%3Dlt_c_adsigg%26OUTPUT%3Dapplication%2Fjson%26SRSNAME%3DEPSG%3A4326%26maxfeatures%3D100%26domain%3Dmap.vworld.kr";
+    	//var url = "http://localhost:8082/example/web2/geojson_sample2.json"; // 로컬 파일 호출 시
+    	        
+        // parser 설명.
+        // parser 생성자.
+        var parser = new vw.GMLParser();
+		// 아이디 지정. --> parser에 지정이 되면, Feature객체에게도 상속 "sample-0,1,..." 형태로 아이디가 부여됩니다.
+        parser.setId("sample");
+        //var featureInfos = parser.readTemp(vw.GMLParserType.GEOJSON, url, "EPSG:4326");
+        // data 읽기. parser.read( 데이터타입, 데이터경로, 데이터좌표계)
+        // 전달되는 좌표계를 의미하며, 이 좌표를 웹지엘에서는 EPSG:4326으로 변환하여 사용합니다.
+        // 데이터타입. vw.GMLParserType { GEOJSON, GML1, GML2, GML2 } 
+        var featureInfos = parser.read(vw.GMLParserType.GEOJSON, url, "EPSG:4326");
+        
+         var options =         {
+        		isTerrain : false,		// 지형 따라 출력시 true, 지면에서 위로 출력시 false
+                width : 50,			// 선의 경우 크기지정.
+                material : new vw.Color(255,0,0,255).ws3dColor.withAlpha(0.2),	// RGBA A값만 255이하로 주면 투명 또는 withAlpha(1.0~0.1)로 설정.
+                outline : true,			// 아웃라인지정시 true, 아웃라인 미지정 false
+                outlineWidth : 5,		// 아웃라인 너비. 
+                outlineColor : vw.Color.YELLOW.ws3dColor,		// 아웃라인 색상. 
+                height : 1600.0			// 높이 지정값 meter.
+            };
+        // 출력 색상등 지정.
+        featureInfos.setOption(options);
+        // Point의 경우 이미지 설정. options 항목이 필요없음.
+        //featureInfos.setImage("https://map.vworld.kr/images/comm/symbol_05.png");
+        // 출력 좌표 설정.
+
+        const promise = new Promise((resolve, reject) => {
+            featureInfos.makeCoords();
+            resolve('promise');
+        });
+
+        promise.then((value) => {
+            
+            var result = "";
+            featureInfos.objCollection.collectionProp.forEach(function(i){ // objCollection.collectionProp 객체의 속성 값을 가지고 있음
+                result += i.properties.full_nm+" "
+                $("#features").html(result);
+            })
+        });
+
+        
+
+        
+        
+        // 이벤트
+        var feafureEventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {            
+            //ws3d.viewer.map.clearAllHighlightedFeatures();
+             //featureInfo 가 존재 -> 3D 객체 클릭
+			//onsole.log("featureInfo :" , windowPosition, ecefPosition, cartographic, featureInfo);
+             if ( featureInfo ) {
+            	 var feature = featureInfos.getById(featureInfo.groupId);
+            	 console.log("after feature :" , featureInfos.objCollection);
+            	 console.log("feature :" , feature );
+            	 // 그래픽객체 미출력
+            	 // feature.hide();
+            	 // FeatureInfo 객체 삭제1.
+            	 //featureInfos.removeById(feature.id);
+            	// FeatureInfo 객체 삭제2.
+            	 featureInfos.removeByObj(feature);
+            	 // feature 정보를 가지고 있는 properties
+            	 //console.log("feature properties:" , feature.getProperties());
+            	 console.log("after feature :" , featureInfos.objCollection);
+             }
+        };
+        // 이벤트 설정.
+        featureInfos.addEventListener(feafureEventHandler);
+        // 출력.
+        featureInfos.show();
+	}
+    
+    function geoxml() {
+    	//var url = "https://2d.vworld.kr/2DCache/gis/map/WFS?TYPENAME=LT_C_ADEMD,LT_C_ADEMD_INFO&BBOX=14150610.226532113,4500878.921040842,14150930.226532113,4501198.921040842&propertyname=()(emd_cd,full_nm,emd_kor_nm,emd_eng_nm,AG_GEOM)&SERVICE=WFS&REQUEST=GetFeature&OUTPUTFORMAT=text/xml;%20subtype=gml/2.1.2&VERSION=1.1.0&EXCEPTIONS=text/xml&apiKey=@{apikey}&srsname=epsg:900913";
+    	var url = "https://2d.vworld.kr/2DCache/gis/map/WFS?TYPENAME=LT_C_UPISUQ171&BBOX=14133344.744506465,4496255.517928099,14133464.744506465,4496375.517928099&propertyname=(sig_nam,lcl_nam,mls_nam,scl_nam,dgm_nm,AG_GEOM)&SERVICE=WFS&REQUEST=GetFeature&OUTPUTFORMAT=text/xml;%20subtype=gml/2.1.2&VERSION=1.1.0&EXCEPTIONS=text/xml&apiKey=@{apikey}&srsname=epsg:900913";
+    	url = "https://map.vworld.kr/proxy.do?url=" + encodeURIComponent(url);
+        var parser = new vw.GMLParser();
+        
+        var featureInfos = parser.read(vw.GMLParserType.GML2, url, "EPSG:900913");
+        
+        var options =         {
+        		isTerrain : false,		// 지형따라 출력시 true, 지면에서 위로 출력시 false
+                //width : 100,			// 선의 경우 크기지정.
+                material : new vw.Color(255,0,0,255).ws3dColor.withAlpha(0.4),	// RGBA A값만 255이하로 주면 투명 또는 withAlpha(1.0~0.1)로 설정.
+                outline : true,			// 아웃라인지정시 true, 아웃라인 미지정 false
+                outlineWidth : 5,		// 아웃라인 너비. 
+                outlineColor : vw.Color.YELLOW.ws3dColor,		// 아웃라인 색상. 
+                height : 150.0			// 높이 지정값 meter.
+            };        
+            
+        featureInfos.setOption(options);
+        featureInfos.makeCoords();
+        // 이벤트
+        var feafureEventHandler = function(windowPosition, ecefPosition, cartographic, featureInfo) {            
+            //ws3d.viewer.map.clearAllHighlightedFeatures();
+             //featureInfo 가 존재 -> 3D 객체 클릭
+			//onsole.log("featureInfo :" , windowPosition, ecefPosition, cartographic, featureInfo);
+             if ( featureInfo ) {
+            	 console.log("feature :" , featureInfo);
+            	 var feature = featureInfos.getById(featureInfo.groupId);
+            	 // feature 정보를 가지고 있는 properties
+            	 console.log("feature properties:" , feature.getProperties());
+             }
+        };
+        // 이벤트 설정.
+        featureInfos.addEventListener(feafureEventHandler);        
+        featureInfos.show();
+    }
+    
+	
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "data_id": "LT_C_DAMYOJ",
+  "svc_ide": "damyoj",
+  "name": "단지시설용지",
+  "cat": "단지시설용지",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "용지분류명"
+    },
+    {
+      "name": "dan_name",
+      "single_search": false,
+      "type": "",
+      "desc": "단지명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

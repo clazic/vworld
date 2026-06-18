@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>showGrid</title>
+<!-- 지도 로드하기 -->
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+
+<!-- 분석 기능 로드하기 -->
+
+<script type="module">
+  import CustomVerticalBarPrimitiveLoader
+    from 'https://map.vworld.kr/js/dtkmap/tool3d/libapis/customVerticalBarPrimitive/customVerticalBarPrimitiveLoader.esm.js';
+  window.CustomVerticalBarPrimitiveLoader = CustomVerticalBarPrimitiveLoader;
+</script>
+<script src="https://map.vworld.kr/js/dtkmap/tool3d/libapis/customVerticalBarPrimitive/customVerticalBarPrimitive_api.js"></script>
+
+</head>
+<body>
+  <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+  막대 최소 높이:  <input type="number" id="barMin" value="100" style="width:70px;">
+  막대 최대 높이:  <input type="number" id="barMax" value="2000" style="width:80px;">
+  막대 크기 배율:  <input type="number" id="radiusScale" value="2.0" step="0.1" style="width:60px;">
+  <button id="GridBtnn">Grid 가시화</button>
+  <div id="GridResult" style="margin-top: 20px;">
+    <h3>분석 결과:</h3>
+   </div>
+
+<script type="text/javascript">
+function vwmap() {
+  var options = {
+    mapId : "vmap",
+    initPosition: new vw.CameraPosition(
+      new vw.CoordZ(126.923100000039,37.5262083301207,2000),
+      new vw.Direction(0, -90, 0)
+    ),
+    logo: true,
+    navigation: false
+  };
+  var map = new vw.Map();
+  map.setOption(options);
+  map.start();
+}
+vwmap();
+
+var barManager = new CustomVerticalBarPrimitiveManager({
+  barHeightMin: 100,     // grid 막대 최소 높이
+  barHeightMax: 2000,   // grid 막대 최대 높이
+  radiusScale : 2.0,      // grid 막대 크기
+  palette     : ["#00FFFF","#FFFF00","#FF0000"]  // 막대 색상
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelector("#GridBtnn")?.addEventListener("click", function () {
+    const minInput   = document.getElementById("barMin");
+    const maxInput   = document.getElementById("barMax");
+    const radiusInput = document.getElementById("radiusScale");
+
+    let barHeightMin = parseFloat(minInput?.value);
+    let barHeightMax = parseFloat(maxInput?.value);
+    let radiusScale  = parseFloat(radiusInput?.value);
+
+    ws3d.viewer.scene.primitives.removeAll()
+
+    barManager = new CustomVerticalBarPrimitiveManager({
+        barHeightMin: barHeightMin,
+        barHeightMax: barHeightMax,
+        radiusScale : radiusScale,
+        palette     : ["#00FFFF","#FFFF00","#FF0000"]
+    });
+
+    barManager.addGridLayer(data, { resultElementId: "GridResult" });
+  });
+});
+
+// 예시 데이터
+let data = [
+  {"id": 1,  "lat": 37.5262, "lon": 126.9239, "weight": 72},
+  {"id": 2,  "lat": 37.5250, "lon": 126.9251, "weight": 55},
+  {"id": 3,  "lat": 37.5241, "lon": 126.9228, "weight": 43},
+  {"id": 4,  "lat": 37.5233, "lon": 126.9276, "weight": 66},
+  {"id": 5,  "lat": 37.5220, "lon": 126.9292, "weight": 38},
+  {"id": 6,  "lat": 37.5212, "lon": 126.9325, "weight": 81},
+  {"id": 7,  "lat": 37.5203, "lon": 126.9341, "weight": 64},
+  {"id": 8,  "lat": 37.5194, "lon": 126.9386, "weight": 90},
+  {"id": 9,  "lat": 37.5201, "lon": 126.9418, "weight": 52},
+  {"id": 10, "lat": 37.5215, "lon": 126.9446, "weight": 47},
+  {"id": 11, "lat": 37.5230, "lon": 126.9462, "weight": 35},
+  {"id": 12, "lat": 37.5255, "lon": 126.9449, "weight": 68},
+  {"id": 13, "lat": 37.5274, "lon": 126.9417, "weight": 58},
+  {"id": 14, "lat": 37.5282, "lon": 126.9379, "weight": 73},
+  {"id": 15, "lat": 37.5289, "lon": 126.9340, "weight": 61},
+  {"id": 16, "lat": 37.5295, "lon": 126.9303, "weight": 49},
+  {"id": 17, "lat": 37.5308, "lon": 126.9274, "weight": 44},
+  {"id": 18, "lat": 37.5316, "lon": 126.9230, "weight": 77},
+  {"id": 19, "lat": 37.5324, "lon": 126.9198, "weight": 62},
+  {"id": 20, "lat": 37.5312, "lon": 126.9169, "weight": 40},
+  {"id": 21, "lat": 37.5297, "lon": 126.9157, "weight": 54},
+  {"id": 22, "lat": 37.5279, "lon": 126.9168, "weight": 59},
+  {"id": 23, "lat": 37.5266, "lon": 126.9194, "weight": 71},
+  {"id": 24, "lat": 37.5249, "lon": 126.9209, "weight": 46}
+];
+ </script>
+</body>
+</html>

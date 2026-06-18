@@ -1,0 +1,81 @@
+{
+  "data_id": "LT_C_LANDINFOBASEMAP",
+  "svc_ide": "landinfobasemap",
+  "name": "LX맵",
+  "cat": "LX맵",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "pnu",
+      "single_search": true,
+      "type": "",
+      "desc": "pnu"
+    },
+    {
+      "name": "sido_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시도명"
+    },
+    {
+      "name": "sgg_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "emd_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "읍면동명"
+    },
+    {
+      "name": "ri_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "리 명"
+    },
+    {
+      "name": "jibun",
+      "single_search": false,
+      "type": "",
+      "desc": "지번"
+    },
+    {
+      "name": "jimok",
+      "single_search": false,
+      "type": "",
+      "desc": "지목명"
+    },
+    {
+      "name": "parea",
+      "single_search": false,
+      "type": "",
+      "desc": "면적"
+    },
+    {
+      "name": "rn_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "도로명"
+    },
+    {
+      "name": "bld_mnnm",
+      "single_search": false,
+      "type": "",
+      "desc": "건물본번"
+    },
+    {
+      "name": "bld_slno",
+      "single_search": false,
+      "type": "",
+      "desc": "건물부번"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "data_id": "LT_C_DAMYUCH",
+  "svc_ide": "damyuch",
+  "name": "단지유치업종",
+  "cat": "단지유치업종",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "cat_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "업종분류명"
+    },
+    {
+      "name": "dan_name",
+      "single_search": false,
+      "type": "",
+      "desc": "단지명"
+    },
+    {
+      "name": "upj_name",
+      "single_search": false,
+      "type": "",
+      "desc": "유치업종명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

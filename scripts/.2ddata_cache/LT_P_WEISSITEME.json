@@ -1,0 +1,63 @@
+{
+  "data_id": "LT_P_WEISSITEME",
+  "svc_ide": "weissiteme",
+  "name": "수질측정망공단배수지점",
+  "cat": "수질측정망공단배수지점",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "st_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "측정소코드"
+    },
+    {
+      "name": "st_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "측정소명"
+    },
+    {
+      "name": "am_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "중권역명"
+    },
+    {
+      "name": "st_id",
+      "single_search": false,
+      "type": "",
+      "desc": "채수지검"
+    },
+    {
+      "name": "chk_mngt",
+      "single_search": false,
+      "type": "",
+      "desc": "조사기관"
+    },
+    {
+      "name": "int_year",
+      "single_search": false,
+      "type": "",
+      "desc": "설치년도"
+    },
+    {
+      "name": "clo_year",
+      "single_search": false,
+      "type": "",
+      "desc": "폐쇄년도"
+    },
+    {
+      "name": "bjd_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "법정동코드"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

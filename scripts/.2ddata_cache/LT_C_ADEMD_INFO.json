@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_ADEMD_INFO",
+  "svc_ide": "ademd",
+  "name": "읍면동",
+  "cat": "읍면동",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "emd_cd",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역코드"
+    },
+    {
+      "name": "full_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "행정구역명"
+    },
+    {
+      "name": "emd_kor_nm",
+      "single_search": true,
+      "type": "",
+      "desc": "읍면동명"
+    },
+    {
+      "name": "emd_eng_nm",
+      "single_search": false,
+      "type": "",
+      "desc": "읍면동 영문명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

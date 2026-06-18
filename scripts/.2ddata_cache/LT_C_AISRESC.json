@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_AISRESC",
+  "svc_ide": "aisresc",
+  "name": "비행제한구역",
+  "cat": "비행제한구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "restricted",
+      "single_search": false,
+      "type": "",
+      "desc": "비행제한구역전체라벨"
+    },
+    {
+      "name": "res_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "비행제한구역라벨1"
+    },
+    {
+      "name": "res_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "비행제한구역라벨2"
+    },
+    {
+      "name": "res_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "비행제한구역라벨3"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "지오메트리"
+    }
+  ]
+}

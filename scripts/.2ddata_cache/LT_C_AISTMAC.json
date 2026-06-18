@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_AISTMAC",
+  "svc_ide": "aistmac",
+  "name": "접근관제구역",
+  "cat": "접근관제구역",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "tma_lbl_1",
+      "single_search": false,
+      "type": "",
+      "desc": "접근관제구역라벨1"
+    },
+    {
+      "name": "tma_lbl_2",
+      "single_search": false,
+      "type": "",
+      "desc": "접근관제구역라벨2"
+    },
+    {
+      "name": "tma_lbl_3",
+      "single_search": false,
+      "type": "",
+      "desc": "접근관제구역라벨3"
+    },
+    {
+      "name": "tma_lbl_4",
+      "single_search": false,
+      "type": "",
+      "desc": "접근관제구역라벨4"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

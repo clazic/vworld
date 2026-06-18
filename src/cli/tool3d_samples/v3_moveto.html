@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MapMove</title>
+    <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=@{apikey}"></script>
+</head>
+
+<body>
+    <div id="vmap" style="width:100%;height:350px;left:0px;top:0px"></div>
+
+    <input type="button" onclick="vwmoveTo(126.923100000039,37.5262083301207,5000)" value="여의도">
+    <input type="button" onclick="vwmoveTo(131.864677840073,37.2414795955336,2000)" value="독도">
+    <script type="text/javascript">
+        var options = {
+            mapId: "vmap",
+            initPosition: new vw.CameraPosition(
+                new vw.CoordZ(127.425, 38.196, 1548700),
+                new vw.Direction(0, -90, 0)
+            ),
+            logo: true,
+            navigation: true
+        };
+
+        var map = new vw.Map();
+        map.setOption(options);
+        map.start();
+
+        function vwmoveTo(x, y, z) {
+            var movePo = new vw.CoordZ(x, y, z);
+            var mPosi = new vw.CameraPosition(movePo, new vw.Direction(0, -80, 0));
+            map.moveTo(mPosi);
+        }
+    </script>
+</body>
+
+</html>

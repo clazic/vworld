@@ -1,0 +1,111 @@
+{
+  "data_id": "LT_P_DGMUSEUMART",
+  "svc_ide": "dgmuseumart",
+  "name": "박물관미술관",
+  "cat": "박물관미술관",
+  "geom": "Point",
+  "attrs": [
+    {
+      "name": "mus_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시설명"
+    },
+    {
+      "name": "mus_typ",
+      "single_search": false,
+      "type": "",
+      "desc": "박물관미술관구분"
+    },
+    {
+      "name": "new_adr",
+      "single_search": false,
+      "type": "",
+      "desc": "소재지도로명주소"
+    },
+    {
+      "name": "opr_tel",
+      "single_search": false,
+      "type": "",
+      "desc": "운영기관전화번호"
+    },
+    {
+      "name": "opr_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "운영기관명"
+    },
+    {
+      "name": "wds_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "평일관람시작시각"
+    },
+    {
+      "name": "wde_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "평일관람종료시각"
+    },
+    {
+      "name": "hds_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "공휴일관람시작시각"
+    },
+    {
+      "name": "hde_tme",
+      "single_search": false,
+      "type": "",
+      "desc": "공휴일관람종료시각"
+    },
+    {
+      "name": "hdy_inf",
+      "single_search": false,
+      "type": "",
+      "desc": "휴관정보"
+    },
+    {
+      "name": "adt_fee",
+      "single_search": false,
+      "type": "",
+      "desc": "어른관람료"
+    },
+    {
+      "name": "yot_fee",
+      "single_search": false,
+      "type": "",
+      "desc": "청소년관람료"
+    },
+    {
+      "name": "chd_fee",
+      "single_search": false,
+      "type": "",
+      "desc": "어린이관람료"
+    },
+    {
+      "name": "mng_tel",
+      "single_search": false,
+      "type": "",
+      "desc": "관리기관전화번호"
+    },
+    {
+      "name": "mng_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "관리기관명"
+    },
+    {
+      "name": "reg_dat",
+      "single_search": false,
+      "type": "",
+      "desc": "데이터기준일자"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}

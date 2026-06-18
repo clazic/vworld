@@ -1,0 +1,39 @@
+{
+  "data_id": "LT_C_GIMSLINEA",
+  "svc_ide": "cgimslinea",
+  "name": "지질구조밀도",
+  "cat": "지질구조밀도",
+  "geom": "Polygon",
+  "attrs": [
+    {
+      "name": "regn_cd",
+      "single_search": false,
+      "type": "",
+      "desc": "지역코드"
+    },
+    {
+      "name": "info",
+      "single_search": false,
+      "type": "",
+      "desc": "주요정보"
+    },
+    {
+      "name": "legend",
+      "single_search": false,
+      "type": "",
+      "desc": "범례"
+    },
+    {
+      "name": "sig_nam",
+      "single_search": false,
+      "type": "",
+      "desc": "시군구명"
+    },
+    {
+      "name": "ag_geom",
+      "single_search": false,
+      "type": "",
+      "desc": "GEOMETRY 데이터"
+    }
+  ]
+}
