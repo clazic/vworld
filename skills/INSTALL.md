@@ -2,7 +2,39 @@
 
 VWorld OpenAPI(한국 공간정보: 지오코딩·검색·2D데이터·국가중점데이터·WMS/WFS·타일·지도임베드)를 호출하는 **자기완결 CLI 스킬**. Chrome·Node 등 추가 런타임 불필요 — 인터넷 연결과 본인 VWorld 인증키만 있으면 동작합니다.
 
-## 1. 압축 해제 & 배치
+## 0. 원라이너 설치 (권장)
+
+설치 스크립트가 **Claude Code 스킬 번들 전체**(바이너리·문서·행정동 sqlite 포함)를 GitHub Releases에서 받아 스킬 경로에 배치합니다.
+
+```bash
+# macOS / Linux — 기본: user 범위(~/.claude/skills/vworld)
+curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+
+# 프로젝트(현재 디렉터리)에 설치하려면:
+VWORLD_SCOPE=project curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+
+# Playwright MCP 까지 함께 설치(3D 분석 결과 자동추출용):
+VWORLD_PLAYWRIGHT=1 curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+```
+
+```powershell
+# Windows — 기본: user 범위(%USERPROFILE%\.claude\skills\vworld)
+irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1 | iex
+
+# 파라미터(project/cli, Playwright)를 주려면 스크립트블록으로:
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1))) -Scope project -Playwright
+```
+
+| 설정 | sh 환경변수 | ps1 파라미터 | 값 / 기본 |
+|------|-------------|--------------|-----------|
+| 설치 범위 | `VWORLD_SCOPE` | `-Scope` | `user`(기본) · `project` · `cli`(단독 바이너리만) |
+| Playwright MCP | `VWORLD_PLAYWRIGHT=1` | `-Playwright` | 미지정 시 설치 안 함(대화형 터미널에선 y/N 질문) |
+| zip URL 오버라이드 | `VWORLD_ZIP_URL` | `-ZipUrl` | 기본: Releases latest |
+
+> 비대화형 파이프(`curl\|bash`)에서는 환경변수/파라미터가 우선이고, 일반 터미널에서 직접 실행하면 범위·Playwright 여부를 대화형으로 묻습니다. 둘 다 없으면 **user** 범위로 진행합니다.
+> `cli` 범위는 스킬이 아니라 단독 CLI 바이너리만 `~/.local/bin`(Windows는 `%LOCALAPPDATA%\vworld`)에 설치합니다.
+
+## 1. 수동 설치 (zip 직접 배치)
 zip을 풀면 `skills/` 폴더가 나옵니다.
 - **Claude Code 스킬로 사용**: `skills/` 폴더를 스킬 경로에 배치 → 자연어로 호출.
 - **단독 CLI로 사용**: `skills/app/`의 OS별 바이너리를 직접 실행.
