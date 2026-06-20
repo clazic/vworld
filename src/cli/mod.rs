@@ -46,7 +46,7 @@ pub struct GlobalArgs {
     #[arg(long, global = true)]
     pub referer: Option<String>,
 
-    /// 설정파일 경로 오버라이드(dev/test). 미지정 시 current_exe 기준 app/config.toml.
+    /// 설정파일 경로 오버라이드. 미지정 시 ~/.vworld/config.toml (Windows: %USERPROFILE%\.vworld\config.toml).
     #[arg(long, global = true)]
     pub config: Option<PathBuf>,
 }
