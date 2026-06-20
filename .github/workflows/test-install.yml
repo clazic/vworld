@@ -1,0 +1,84 @@
+name: test-install
+
+# 실제 3-OS 러너에서 install.sh / install.ps1 을 cli·skill 모드로 실행해
+# Releases 자산 다운로드 → 설치 → 바이너리 실행까지 검증한다 (수동 실행, 회귀 테스트).
+on:
+  workflow_dispatch:
+
+jobs:
+  # ── macOS / Linux (install.sh) ────────────────────────────────────────
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cli 모드 설치 (Releases 바이너리 다운로드)
+        env:
+          VWORLD_SCOPE: cli
+          VWORLD_DIR: ${{ runner.temp }}/vworld-cli
+        run: |
+          bash scripts/install.sh
+          BIN="${{ runner.temp }}/vworld-cli/vworld"
+          [ -x "$BIN" ] || { echo "::error::cli 바이너리 없음: $BIN"; exit 1; }
+          echo "=== cli 바이너리 실행 ==="; "$BIN" --version
+          CFG="${{ runner.temp }}/vworld-cli/app/config.toml"
+          [ -f "$CFG" ] || { echo "::error::config.toml 미생성"; exit 1; }
+          echo "config.toml 생성 확인 OK"
+
+      - name: user 스킬 모드 설치 (vworld-skill.zip 다운로드·해제)
+        env:
+          VWORLD_SCOPE: user
+        run: |
+          bash scripts/install.sh
+          SBIN="${HOME}/.claude/skills/vworld/app/vworld"
+          [ -x "$SBIN" ] || { echo "::error::스킬 바이너리 없음: $SBIN"; exit 1; }
+          echo "=== 스킬 바이너리 실행 ==="; "$SBIN" --version
+          [ -f "${HOME}/.claude/skills/vworld/SKILL.md" ] || { echo "::error::SKILL.md 없음(zip 평탄 구조 실패?)"; exit 1; }
+          echo "SKILL.md 배치 확인 OK (zip 루트 평탄 구조 정상)"
+          [ -x "${HOME}/.local/bin/vworld" ] || { echo "::error::스킬 설치 시 ~/.local/bin CLI 미등록"; exit 1; }
+          echo "~/.local/bin/vworld CLI 등록 확인 OK"
+
+  # ── Windows (install.ps1) ─────────────────────────────────────────────
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: cli 모드 설치 (Releases 에서 vworld-windows.exe 다운로드)
+        shell: pwsh
+        run: |
+          ./scripts/install.ps1 -Scope cli
+          $bin = Join-Path $env:LOCALAPPDATA "vworld\vworld.exe"
+          if (-not (Test-Path $bin)) { Write-Error "바이너리 없음: $bin"; exit 1 }
+          Write-Host "=== cli 바이너리 실행 ==="
+          & $bin --version
+          $cfg = Join-Path $env:LOCALAPPDATA "vworld\app\config.toml"
+          if (-not (Test-Path $cfg)) { Write-Error "config.toml 미생성: $cfg"; exit 1 }
+          Write-Host "config.toml 생성 확인 OK"
+
+      - name: user 스킬 모드 설치 (vworld-skill.zip 다운로드·해제)
+        shell: pwsh
+        run: |
+          ./scripts/install.ps1 -Scope user
+          $skillbin = Join-Path $env:USERPROFILE ".claude\skills\vworld\app\vworld.exe"
+          if (-not (Test-Path $skillbin)) { Write-Error "스킬 바이너리 없음: $skillbin"; exit 1 }
+          Write-Host "=== 스킬 바이너리 실행 ==="
+          & $skillbin --version
+          $skillmd = Join-Path $env:USERPROFILE ".claude\skills\vworld\SKILL.md"
+          if (-not (Test-Path $skillmd)) { Write-Error "SKILL.md 없음(zip 평탄 구조 실패?): $skillmd"; exit 1 }
+          Write-Host "SKILL.md 배치 확인 OK (zip 루트 평탄 구조 정상)"
+
+      - name: '%LOCALAPPDATA%\vworld CLI 등록 + User PATH 확인'
+        shell: pwsh
+        run: |
+          $cli = Join-Path $env:LOCALAPPDATA "vworld\vworld.exe"
+          if (-not (Test-Path $cli)) { Write-Error "스킬 설치 시 CLI 미등록: $cli"; exit 1 }
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          if ($userPath -notlike "*vworld*") { Write-Error "User PATH 에 vworld 미등록"; exit 1 }
+          Write-Host "CLI 등록 + User PATH 자동등록 확인 OK"
