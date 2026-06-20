@@ -22,14 +22,18 @@ Windows PowerShell:
 irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1 | iex
 ```
 
-### 방법 2 — 사전빌드 바이너리 직접 다운로드
+### 방법 2 — 사전빌드 바이너리 직접 다운로드 (GitHub Releases)
+
+바이너리는 저장소에 두지 않고 **GitHub Actions가 소스에서 3-OS(mac·win·linux) 빌드해 [Releases](https://github.com/clazic/vworld/releases/latest) 자산으로 배포**합니다. 항상 최신 버전을 받는 `latest/download` URL:
 
 | OS | 파일 | URL |
 |----|------|-----|
-| macOS (universal x86_64 + arm64) | `vworld-macos` | https://raw.githubusercontent.com/clazic/vworld/main/skills/app/vworld-macos |
-| macOS arm64 native | `vworld` | https://raw.githubusercontent.com/clazic/vworld/main/skills/app/vworld |
-| Linux x86_64 (glibc ≥ 2.34) | `vworld-linux` | https://raw.githubusercontent.com/clazic/vworld/main/skills/app/vworld-linux |
-| Windows x86_64 | `vworld-windows.exe` | https://raw.githubusercontent.com/clazic/vworld/main/skills/app/vworld-windows.exe |
+| macOS (universal x86_64 + arm64) | `vworld-macos` | https://github.com/clazic/vworld/releases/latest/download/vworld-macos |
+| macOS arm64 native | `vworld` | https://github.com/clazic/vworld/releases/latest/download/vworld |
+| Linux x86_64 (glibc ≥ 2.34) | `vworld-linux` | https://github.com/clazic/vworld/releases/latest/download/vworld-linux |
+| Windows x86_64 | `vworld-windows.exe` | https://github.com/clazic/vworld/releases/latest/download/vworld-windows.exe |
+
+> 특정 버전을 받으려면 `latest/download`를 `download/v0.1.0`처럼 태그 경로로 바꿉니다. 원클릭 스크립트도 `VWORLD_VERSION=v0.1.0`(sh) / `-Version v0.1.0`(ps1)으로 버전을 고정할 수 있습니다.
 
 다운로드 후 실행 권한을 부여합니다. 인증키는 첫 실행 시 `vworld config add-key`로 등록하면 `~/.vworld/config.toml`에 저장됩니다(바이너리 옆에 설정파일을 둘 필요 없음).
 
