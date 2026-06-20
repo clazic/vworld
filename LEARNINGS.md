@@ -21,7 +21,7 @@
 
 ## HOW-TO: 행정동별 공시지가(또는 속성) 비교분석
 
-공시지가/PNU는 **법정동 단위**뿐이고 행정동(OO1동/2동)은 **역지오 `level4AC`** 로만 구분된다(상세: `docs/haengjeong_api.md`).
+공시지가/PNU는 **법정동 단위**뿐이고 행정동(OO1동/2동)은 **역지오 `level4AC`** 로만 구분된다(상세: `references/docs/haengjeong_api.md`).
 
 **★ 단일 명령(권장)** — 아래 전 절차가 CLI에 내장됨(WFS 전수 → 역지오 분류 → 자동 재처리 → 행정동별 통계):
 ```bash
@@ -63,6 +63,6 @@ vworld geocode --input coords.txt --reverse --type BOTH --concurrency 3 > hjd.js
 - 2026-06-16 | "동 전체 필지 공시지가" | data --emd-cd 단독 실패 / WFS bbox 0건 | 2D data는 geom/attrFilter 필수, WFS는 **`--pnu 법정동8자리`가 동 전체 조회의 정답**(bbox 무시) | 동 단위 전수는 `ned <WFS> --pnu <8자리> --all`. 신정동 11,831필지.
 - 2026-06-16 | WFS 1000건 초과 | maxFeatures 1000 cap + **startIndex 미지원** | 오프셋 페이징 불가하나 `totalFeatures`는 cap 무관 진짜 건수 제공 | **PNU 접두 적응분할**로 우회(CLI `--all`에 내장). 무효 접두는 totalFeatures=0으로 자동 가지치기.
 - 2026-06-16 | VWorld 에러 JSON 파싱 | text에 이스케이프 안 된 따옴표(`단일검색="Y"`)로 serde 크래시 | VWorld가 비표준 JSON 반환 | 파서에 정규식 salvage 폴백 추가 — 깨진 에러 JSON도 code/text 복원해 정상 에러 처리.
-- 2026-06-16 | 행정동 분리 | 공시지가/PNU는 법정동 단위뿐 | VWorld에 행정동 폴리곤 없음 | **역지오 `GetAddress`의 `level4A`(행정동명)/`level4AC`(행정동코드)** 로 분리. 실측: 신정1동=3114051000, 신정2동=3114052000(원응답 확인). docs/haengjeong_api.md.
+- 2026-06-16 | 행정동 분리 | 공시지가/PNU는 법정동 단위뿐 | VWorld에 행정동 폴리곤 없음 | **역지오 `GetAddress`의 `level4A`(행정동명)/`level4AC`(행정동코드)** 로 분리. 실측: 신정1동=3114051000, 신정2동=3114052000(원응답 확인). references/docs/haengjeong_api.md.
 - 2026-06-16 | WFS 좌표계 | `getIndvdLandPriceWFS` 기본 CRS=**EPSG:900913(웹메르카토르)** (좌표 1.4e7대) | srsName 미지정 시 VWorld 기본=900913 | **`--param srsName=EPSG:4326`** 부착 시 lon/lat 직접 반환 → 좌표 변환 불필요.
 - 2026-06-16 | geocode 역지오 함정 | `--reverse`인데 `--type` 기본 ROAD면 빈 결과 | 역지오는 type 영향 받음 | 역지오는 **항상 `--type BOTH`**. geocoder 일일 한도 40,000건(공식 가이드).

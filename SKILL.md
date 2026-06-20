@@ -65,11 +65,11 @@ vworld config path
 - 등록된 모든 키가 동시성 키 풀에 자동 편입(`--concurrency`로 병렬 가속).
 - 도메인 등록 키는 `--referer`(또는 config `referer`)로 `domain=` 쿼리·Referer 헤더 주입. CLI는 웹뷰어가 아니므로 도메인 등록 키면 referer 필수일 수 있음.
 
-## 레퍼런스 문서 (docs/)
+## 레퍼런스 문서 (references/docs/)
 
-- `docs/rest_api_catalog.md` — 13종 REST 엔드포인트·파라미터·옵션 전수.
-- `docs/national_data_catalog.md` — 국가중점데이터(NED) 115 오퍼레이션 전수.
-- `docs/USAGE.md` — 명령별 상세 사용법·입출력 예시·함정.
+- `references/docs/rest_api_catalog.md` — 13종 REST 엔드포인트·파라미터·옵션 전수.
+- `references/docs/national_data_catalog.md` — 국가중점데이터(NED) 115 오퍼레이션 전수.
+- `references/docs/USAGE.md` — 명령별 상세 사용법·입출력 예시·함정.
 
 ## 함정 (요약 — 상세는 LEARNINGS.md)
 
@@ -89,7 +89,7 @@ vworld config path
 `vworld map 3dsim --analysis <type> --address "<주소>"`(또는 `--center lon,lat`) `-o out.html`
 - 목록: `vworld map 3dsim --analysis list`
 - 종류: slope 경사도 · terrainvolume 토공량 · profile 지형단면 · sunlight 일조량 · sunlightrights 일조권 · sunlightslope 일조사선제한 · visiblearea 가시면적 · viewsurface 시곡면 · culheritalter 문화재현상변경 · route 드론·차량주행 · buildingcontrol 건물편집 · heatmap · cluster · grid · hexbin
-- 파라미터(위치·옵션·지도 인터랙션) 명세: `docs/3dsim_analysis_params.md`
+- 파라미터(위치·옵션·지도 인터랙션) 명세: `references/docs/3dsim_analysis_params.md`
 - 위치는 `--address`(지번/도로명 자동) 또는 `--center lon,lat` 주입. 공식 샘플에 토스 디자인 + 큰 지도가 적용됨.
 
 ### 결과값 자동 추출 (중요)
@@ -138,33 +138,33 @@ vworld 2D지도 API 2.0(OpenLayers 3.10.1 기반 `vw.ol3.*`) 코드샘플을 CLI
 - vworld 로고·"연속지적도…참고용" 안내문구는 모든 생성 HTML에서 CSS로 숨김 처리(`.vw-logo`/`.vw-notice`).
 - 계획·검증 상세: `plan/2026-06-18-09:30:53-2dmap-19samples.md`.
 
-## 데이터 자원 (skills/data)
+## 데이터 자원 (references/data)
 
-### 빌드타임 임베드 카탈로그 (런타임 파일 불요)
+### 빌드타임 codegen 입력 카탈로그 (런타임 파일 불요)
 
 | 파일 | 설명 |
 |------|------|
-| `ned_catalog.tsv` | NED 오퍼레이션 카탈로그 (build.rs codegen으로 바이너리 임베드) |
-| `ned_params.tsv` | NED 파라미터 정의 (build.rs codegen으로 바이너리 임베드) |
-| `twod_catalog.tsv` | 2D 데이터레이어 158종 카탈로그 (build.rs codegen으로 바이너리 임베드) |
-| `twod_attrs.tsv` | 2D 레이어 속성 정의 (build.rs codegen으로 바이너리 임베드) |
-| `twod_seed.tsv` | 2D 레이어 시드 데이터 (build.rs codegen으로 바이너리 임베드) |
+| `references/data/ned_catalog.tsv` | NED 오퍼레이션 카탈로그 (build.rs codegen 입력) |
+| `references/data/ned_params.tsv` | NED 파라미터 정의 (build.rs codegen 입력) |
+| `references/data/twod_catalog.tsv` | 2D 데이터레이어 158종 카탈로그 (build.rs codegen 입력) |
+| `references/data/twod_attrs.tsv` | 2D 레이어 속성 정의 (build.rs codegen 입력) |
+| `references/data/twod_seed.tsv` | 2D 레이어 시드 데이터 (참고용 — 빌드·런타임 미사용) |
 
-이 TSV 파일들은 `build.rs`에서 `include_str!` / codegen으로 **빌드타임에 바이너리에 임베드**된다. 런타임에 파일을 참조하지 않으므로 사용자가 별도로 신경 쓸 필요 없다. 코어(바이너리 + 임베드 tsv)는 **자기완결**이다.
+상위 4종 TSV는 `build.rs`가 **빌드타임에 읽어 `OUT_DIR`에 Rust 정적 테이블 코드를 생성**하고, 그 산출물이 바이너리에 임베드된다. 런타임에 파일을 참조하지 않으므로 사용자가 별도로 신경 쓸 필요 없다. 코어(바이너리 + codegen 테이블)는 **자기완결**이다. `twod_seed.tsv`는 빌드·런타임 어디서도 읽지 않는 참고용 시드 데이터다.
 
 ### vworld.sqlite (132MB) — opt-in 런타임 자원
 
-`vworld.sqlite`는 `--by-hjd` 행정동별 고속 처리를 위한 **선택적(opt-in) 런타임 DB**다. 코어 자기완결 범위 밖의 자원이며 `skills/app`에 동봉하지 않고 `skills/data`에 유지한다.
+`vworld.sqlite`는 `--by-hjd` 행정동별 고속 처리를 위한 **선택적(opt-in) 런타임 DB**다. 코어 자기완결 범위 밖의 자원이며 `skills/app`에 동봉하지 않고 `references/data`에 유지한다.
 
 - **디폴트 경로 없음** — `--hjd-db` 없이도 `--by-hjd`는 역지오코딩 폴백으로 정상 동작(sqlite 불요).
 - **고속화 원하면 부트스트랩 1회 필요**:
 
 ```bash
 # 1) 행정동 경계 SHP로 DB 생성
-vworld hjd-db build --shp <행정동경계.shp> --db skills/data/vworld.sqlite
+vworld hjd-db build --shp <행정동경계.shp> --db references/data/vworld.sqlite
 
 # 2) --hjd-db 경로 인자로 명시 참조
-vworld ned getIndvdLandPriceWFS --pnu <법정동8자리> --by-hjd --hjd-db skills/data/vworld.sqlite
+vworld ned getIndvdLandPriceWFS --pnu <법정동8자리> --by-hjd --hjd-db references/data/vworld.sqlite
 ```
 
 - `--hjd-db <path>`는 **경로 인자** — 자동 참조 안 됨, 반드시 명시.

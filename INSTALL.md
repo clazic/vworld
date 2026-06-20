@@ -8,21 +8,21 @@ VWorld OpenAPI(한국 공간정보: 지오코딩·검색·2D데이터·국가중
 
 ```bash
 # macOS / Linux — 기본: user 범위(~/.claude/skills/vworld)
-curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 
 # 프로젝트(현재 디렉터리)에 설치하려면:
-VWORLD_SCOPE=project curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+VWORLD_SCOPE=project curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 
 # Playwright MCP 까지 함께 설치(3D 분석 결과 자동추출용):
-VWORLD_PLAYWRIGHT=1 curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+VWORLD_PLAYWRIGHT=1 curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 ```
 
 ```powershell
 # Windows — 기본: user 범위(%USERPROFILE%\.claude\skills\vworld)
-irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1 | iex
 
 # 파라미터(project/cli, Playwright)를 주려면 스크립트블록으로:
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1))) -Scope project -Playwright
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1))) -Scope project -Playwright
 ```
 
 | 설정 | sh 환경변수 | ps1 파라미터 | 값 / 기본 |
@@ -82,7 +82,7 @@ Unix 실행 권한: `chmod +x app/vworld-*`
 # WFS 피처를 토스 디자인 지도로 보기 (HTML)
 ./app/vworld-macos wfs --typename lt_c_uq111 --bbox "126.97,37.55,126.99,37.57" -o wfs.html
 ```
-자세한 명령·함정: `SKILL.md`, `docs/USAGE.md`, `docs/rest_api_catalog.md`.
+자세한 명령·함정: `SKILL.md`, `references/docs/USAGE.md`, `references/docs/rest_api_catalog.md`.
 
 ## 5. 3D 분석 결과값 (선택)
 `map 3dsim --analysis`는 분석 **HTML을 생성**합니다. 경사도·토공량 등 결과값은 브라우저(Cesium/WebGL)에서만 계산되므로:
@@ -92,8 +92,8 @@ Unix 실행 권한: `chmod +x app/vworld-*`
 자세한 내용은 `SKILL.md`의 "결과값 자동 추출" 절 참고.
 
 ## 6. 행정동별 분석
-`ned ... --by-hjd`(행정동별 분류·통계)는 행정동 경계 DB(`data/vworld.sqlite`, 약 132MB)를 사용합니다. **배포본에 포함**되어 있어 추가 작업 없이 바로 동작합니다.
-(경계를 직접 갱신하려면: `./app/vworld-macos hjd-db build --shp <행정동경계.shp> --db data/vworld.sqlite`)
+`ned ... --by-hjd`(행정동별 분류·통계)는 행정동 경계 DB(`references/data/vworld.sqlite`, 약 132MB)를 사용합니다. **배포본에 포함**되어 있어 추가 작업 없이 바로 동작합니다.
+(경계를 직접 갱신하려면: `./app/vworld-macos hjd-db build --shp <행정동경계.shp> --db references/data/vworld.sqlite`)
 
 ## 요구사항
 - 추가 런타임/의존성 없음(단일 바이너리 자기완결).
