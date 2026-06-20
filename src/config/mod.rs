@@ -78,14 +78,22 @@ pub fn resolve_config_path(override_path: Option<&Path>) -> Result<PathBuf> {
     default_config_path()
 }
 
-/// 기본 설정 경로 = 실행 바이너리와 **같은 디렉토리**의 `config.toml`.
+/// 기본 설정 경로 = 사용자 홈의 `~/.vworld/config.toml`.
 ///
-/// 배포 구조상 바이너리(`<skill>/app/vworld`)와 설정(`<skill>/app/config.toml`)은 형제다.
-/// 크로스플랫폼: `Path::join`만 사용, 슬래시 하드코딩 없음.
+/// 바이너리 위치와 무관하게 사용자별 홈에 단일 보관(배포 디렉토리 오염 방지).
+/// 크로스플랫폼: 홈은 `HOME`(Unix)·`USERPROFILE`(Windows)에서 해석, 경로는 `Path::join`만 사용.
 pub fn default_config_path() -> Result<PathBuf> {
-    let exe = std::env::current_exe().context("current_exe 해석 실패")?;
-    let dir = exe
-        .parent()
-        .ok_or_else(|| anyhow!("실행 바이너리 부모 디렉토리 없음"))?;
-    Ok(dir.join("config.toml"))
+    Ok(home_dir()?.join(".vworld").join("config.toml"))
+}
+
+/// 사용자 홈 디렉토리 해석(크로스플랫폼). 외부 크레이트 없이 표준 환경변수만 사용.
+fn home_dir() -> Result<PathBuf> {
+    #[cfg(windows)]
+    let home = std::env::var_os("USERPROFILE");
+    #[cfg(not(windows))]
+    let home = std::env::var_os("HOME");
+
+    home.map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .ok_or_else(|| anyhow!("홈 디렉토리를 확인할 수 없습니다 (HOME/USERPROFILE 미설정)"))
 }

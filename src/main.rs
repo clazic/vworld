@@ -1,7 +1,7 @@
 //! VWorld OpenAPI CLI — 자기완결 단일 바이너리.
 //!
 //! 설계: `.omc/plans/2026-06-16-vworld-cli-ai-구현계획.md`
-//! 레퍼런스: `docs/rest_api_catalog.md`, `docs/national_data_catalog.md`
+//! 레퍼런스: `references/docs/rest_api_catalog.md`, `references/docs/national_data_catalog.md`
 
 mod api;
 mod cli;
