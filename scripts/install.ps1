@@ -11,6 +11,7 @@
 #   -Scope <user|project|cli>   설치 범위 (기본 user). cli = 단독 바이너리만.
 #   -Playwright                 Playwright MCP 설치 시도 (claude CLI 필요)
 #   -Dir <경로>                 cli 모드 바이너리 설치 디렉터리 (기본 $env:LOCALAPPDATA\vworld)
+#   -Version <태그>             릴리스 태그 고정 (예: v0.1.0). 비우면 latest
 #   -ZipUrl <URL>               스킬 zip URL 오버라이드 (기본: GitHub Releases latest)
 
 param(
@@ -18,15 +19,21 @@ param(
     [string]$Scope = "",
     [switch]$Playwright,
     [string]$Dir = "",
+    [string]$Version = "",
     [string]$ZipUrl = ""
 )
 
 $ErrorActionPreference = 'Stop'
 
 $Repo = "clazic/vworld"
-$RAW_BASE = "https://raw.githubusercontent.com/$Repo/main/skills/app"
+# 바이너리·zip 은 모두 GitHub Releases 자산에서 받는다 (git 에 바이너리 미보관, CI 빌드).
+$REL_BASE = if ($Version -ne "") {
+    "https://github.com/$Repo/releases/download/$Version"
+} else {
+    "https://github.com/$Repo/releases/latest/download"
+}
 if ($ZipUrl -eq "") {
-    $ZipUrl = "https://github.com/$Repo/releases/latest/download/vworld-skill.zip"
+    $ZipUrl = "$REL_BASE/vworld-skill.zip"
 }
 $SkillName = "vworld"
 $DEFAULT_DIR = Join-Path $env:LOCALAPPDATA "vworld"
@@ -48,8 +55,18 @@ if ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
 # ── 설치 범위(scope) 결정 — 파라미터 1차, Read-Host 2차, 기본 user ────────────
 if ($Scope -eq "") {
     if (-not [Console]::IsInputRedirected) {
-        $answer = Read-Host "설치 범위를 선택하세요 [user/project/cli] (기본 user)"
-        if ($answer -ne "") { $Scope = $answer }
+        Write-Host ""
+        Write-Host "설치 범위를 선택하세요:"
+        Write-Host "  1) user    (%USERPROFILE%\.claude\skills\vworld — 모든 프로젝트, 기본)"
+        Write-Host "  2) project (현재 폴더 .claude\skills\vworld)"
+        Write-Host "  3) cli     (스킬 없이 단독 CLI 바이너리만)"
+        $answer = Read-Host "> "
+        switch ($answer) {
+            "1" { $Scope = "user" }
+            "2" { $Scope = "project" }
+            "3" { $Scope = "cli" }
+            default { if ($answer -ne "") { $Scope = $answer } }
+        }
     }
     if ($Scope -eq "") { $Scope = "user" }
 }
@@ -137,7 +154,7 @@ function Install-Skill {
         New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
         Expand-Archive -Path $tmpZip -DestinationPath $tmpDir -Force
 
-        # zip 은 skills\ 루트를 포함 → skills\* 를 target 으로 복사
+        # 신 zip 은 루트 평탄 구조. 구 zip 의 skills\ 래퍼는 하위호환으로 처리.
         $src = $tmpDir
         if (Test-Path (Join-Path $tmpDir "skills")) { $src = Join-Path $tmpDir "skills" }
 
@@ -176,24 +193,35 @@ function Install-Cli {
     if (-not (Test-Path $INSTALL_DIR)) { New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null }
     if (-not (Test-Path $ConfigDir))   { New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null }
 
-    $BinaryUrl = "$RAW_BASE/$RemoteBinary"
-    Write-Info "바이너리 다운로드 중: $RemoteBinary"
+    $BinaryUrl = "$REL_BASE/$RemoteBinary"
+    Write-Info "바이너리 다운로드 중: $RemoteBinary (Releases)"
     try {
         Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UseBasicParsing
     } catch {
-        Write-Err "바이너리 다운로드 실패. 네트워크 연결을 확인하세요.`n  URL: $BinaryUrl`n  오류: $_"
+        Write-Err "바이너리 다운로드 실패. Releases 자산을 확인하세요.`n  URL: $BinaryUrl`n  오류: $_"
     }
 
-    $ConfigUrl = "$RAW_BASE/config.toml.example"
     if (Test-Path $ConfigPath) {
         Write-Warn "기존 config.toml 발견 — 덮어쓰지 않습니다: $ConfigPath"
     } else {
-        Write-Info "config.toml 템플릿 다운로드 중"
-        try {
-            Invoke-WebRequest -Uri $ConfigUrl -OutFile $ConfigPath -UseBasicParsing
-        } catch {
-            Write-Warn "config.toml 다운로드 실패 (바이너리 설치는 계속 진행됩니다): $_"
-        }
+        Write-Info "config.toml 템플릿 생성: $ConfigPath"
+        @'
+# VWorld CLI 설정 — 본인의 VWorld OpenAPI 인증키를 입력하세요.
+#
+# 1) 키 발급: https://www.vworld.kr -> 오픈API -> 인증키 신청
+# 2) 등록(권장): vworld config add-key <발급받은_KEY> --alias main
+# 3) 또는 아래 [[keys]] 블록의 주석을 풀고 직접 입력
+#
+# 도메인 등록 키면 referer에 등록 도메인을 적습니다(무도메인 서버 키는 생략).
+
+# [[keys]]
+# key = "여기에-발급받은-인증키"
+# referer = "https://your-domain.com"
+
+# [[keys]]
+# key = "두-번째-키"
+# alias = "key2"
+'@ | Set-Content -Path $ConfigPath -Encoding UTF8
     }
 
     Write-Info "SmartScreen 경고가 뜨면: '추가 정보' → '실행' 을 클릭하세요."

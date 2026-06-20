@@ -15,13 +15,19 @@ set -euo pipefail
 #
 # 환경변수:
 #   VWORLD_SCOPE       user(기본) | project | cli
+#   VWORLD_VERSION     릴리스 태그 고정 (예: v0.1.0). 비우면 latest
 #   VWORLD_PLAYWRIGHT  1/yes 이면 Playwright MCP 설치 시도 (claude CLI 필요)
 #   VWORLD_DIR         cli 모드 바이너리 설치 디렉터리 (기본 ~/.local/bin)
 #   VWORLD_ZIP_URL     스킬 zip URL 오버라이드 (기본: GitHub Releases latest)
 
 REPO="clazic/vworld"
-RAW_BASE="https://raw.githubusercontent.com/${REPO}/main/skills/app"
-ZIP_URL="${VWORLD_ZIP_URL:-https://github.com/${REPO}/releases/latest/download/vworld-skill.zip}"
+# 바이너리·zip 은 모두 GitHub Releases 자산에서 받는다 (git 에 바이너리 미보관, CI 빌드).
+if [ -n "${VWORLD_VERSION:-}" ]; then
+  REL_BASE="https://github.com/${REPO}/releases/download/${VWORLD_VERSION}"
+else
+  REL_BASE="https://github.com/${REPO}/releases/latest/download"
+fi
+ZIP_URL="${VWORLD_ZIP_URL:-${REL_BASE}/vworld-skill.zip}"
 SKILL_NAME="vworld"
 DEFAULT_DIR="${HOME}/.local/bin"
 INSTALL_DIR="${VWORLD_DIR:-${DEFAULT_DIR}}"
@@ -70,8 +76,17 @@ esac
 SCOPE="${VWORLD_SCOPE:-}"
 if [ -z "${SCOPE}" ]; then
   if _tty_usable; then
-    printf '설치 범위를 선택하세요 [user/project/cli] (기본 user): ' > /dev/tty 2>/dev/null || true
+    {
+      printf '\n설치 범위를 선택하세요:\n'
+      printf '  1) user    (~/.claude/skills/vworld — 모든 프로젝트에서 사용, 기본)\n'
+      printf '  2) project (현재 폴더 .claude/skills/vworld)\n'
+      printf '  3) cli     (스킬 없이 단독 CLI 바이너리만 ~/.local/bin)\n'
+      printf '> '
+    } > /dev/tty 2>/dev/null || true
     read SCOPE < /dev/tty 2>/dev/null || SCOPE=""
+    case "${SCOPE}" in
+      1) SCOPE="user" ;; 2) SCOPE="project" ;; 3) SCOPE="cli" ;;
+    esac
   fi
   SCOPE="${SCOPE:-user}"
 fi
@@ -159,7 +174,8 @@ install_skill() {
     _err "스킬 번들 압축 해제 실패."
   fi
 
-  # zip 은 skills/ 루트를 포함 → skills/* 를 target 으로 복사
+  # 신 zip 은 루트 평탄 구조(SKILL.md·app/·references/ 가 곧장 루트).
+  # 구 zip 의 skills/ 래퍼는 하위호환으로 함께 처리.
   local src="${tmpdir}"
   [ -d "${tmpdir}/skills" ] && src="${tmpdir}/skills"
 
@@ -209,18 +225,32 @@ install_cli() {
   binary_path="${INSTALL_DIR}/${BINARY_NAME}"
   config_path="${INSTALL_DIR}/${CONFIG_SUBDIR}/config.toml"
 
-  _info "바이너리 다운로드 중: ${REMOTE_BINARY}"
-  if ! curl -fsSL "${RAW_BASE}/${REMOTE_BINARY}" -o "${binary_path}"; then
-    _err "바이너리 다운로드 실패. 네트워크 연결을 확인하세요: ${RAW_BASE}/${REMOTE_BINARY}"
+  _info "바이너리 다운로드 중: ${REMOTE_BINARY} (Releases)"
+  if ! curl -fL "${REL_BASE}/${REMOTE_BINARY}" -o "${binary_path}"; then
+    _err "바이너리 다운로드 실패. Releases 자산을 확인하세요: ${REL_BASE}/${REMOTE_BINARY}"
   fi
 
   if [ -f "${config_path}" ]; then
     _warn "기존 config.toml 발견 — 덮어쓰지 않습니다: ${config_path}"
   else
-    _info "config.toml 템플릿 다운로드 중"
-    if ! curl -fsSL "${RAW_BASE}/config.toml.example" -o "${config_path}"; then
-      _warn "config.toml 다운로드 실패 (바이너리 설치는 계속 진행됩니다)"
-    fi
+    _info "config.toml 템플릿 생성: ${config_path}"
+    cat > "${config_path}" <<'EOF'
+# VWorld CLI 설정 — 본인의 VWorld OpenAPI 인증키를 입력하세요.
+#
+# 1) 키 발급: https://www.vworld.kr → 오픈API → 인증키 신청
+# 2) 등록(권장): vworld config add-key <발급받은_KEY> --alias main
+# 3) 또는 아래 [[keys]] 블록의 주석을 풀고 직접 입력
+#
+# 도메인 등록 키면 referer에 등록 도메인을 적습니다(무도메인 서버 키는 생략).
+
+# [[keys]]
+# key = "여기에-발급받은-인증키"
+# referer = "https://your-domain.com"
+
+# [[keys]]
+# key = "두-번째-키"
+# alias = "key2"
+EOF
   fi
 
   chmod +x "${binary_path}"

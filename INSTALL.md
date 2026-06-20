@@ -30,8 +30,10 @@ irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1 | i
 | 설치 범위 | `VWORLD_SCOPE` | `-Scope` | `user`(기본) · `project` · `cli`(단독 바이너리만) |
 | Playwright MCP | `VWORLD_PLAYWRIGHT=1` | `-Playwright` | 미지정 시 설치 안 함(대화형 터미널에선 y/N 질문) |
 | zip URL 오버라이드 | `VWORLD_ZIP_URL` | `-ZipUrl` | 기본: Releases latest |
+| 버전 고정 | `VWORLD_VERSION` | `-Version` | 예: `v0.1.0`. 비우면 latest |
 
-> 비대화형 파이프(`curl\|bash`)에서는 환경변수/파라미터가 우선이고, 일반 터미널에서 직접 실행하면 범위·Playwright 여부를 대화형으로 묻습니다. 둘 다 없으면 **user** 범위로 진행합니다.
+> 바이너리는 git 에 두지 않고 **GitHub Actions 가 src 에서 3-OS(mac·win·linux) 빌드 → Releases 자산**으로 배포합니다. 설치 스크립트는 Releases 에서 받습니다.
+> 비대화형 파이프(`curl\|bash`)에서는 환경변수/파라미터가 우선이고, 일반 터미널에서 직접 실행하면 범위(번호 선택)·Playwright 여부를 대화형으로 묻습니다. 둘 다 없으면 **user** 범위로 진행합니다.
 > `cli` 범위는 스킬이 아니라 단독 CLI 바이너리만 `~/.local/bin`(Windows는 `%LOCALAPPDATA%\vworld`)에 설치합니다.
 
 ## 1. 수동 설치 (zip 직접 배치)

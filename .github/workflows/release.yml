@@ -1,0 +1,138 @@
+name: release
+
+# git tag v* 푸시(또는 수동 실행) 시 3-OS 네이티브 빌드 → GitHub Releases 자산 게시.
+#   - 바이너리는 git 에 두지 않고 CI 가 소스에서 빌드한다.
+#   - 자산: vworld-macos(universal) · vworld(arm64) · vworld-linux · vworld-windows.exe · vworld-skill.zip
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "릴리스 태그 (예: v0.1.0). 비우면 Cargo.toml 버전 사용"
+        required: false
+
+permissions:
+  contents: write   # Release 생성·자산 업로드
+
+jobs:
+  # ── 1) 3-OS 네이티브 빌드 ──────────────────────────────────────────────
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos
+          - os: ubuntu-latest
+            name: linux
+          - os: windows-latest
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # macOS: arm64 + x64 → lipo universal(vworld-macos) + arm64 사본(vworld)
+      - name: Build macOS (universal)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          lipo -create -output vworld-macos \
+            target/aarch64-apple-darwin/release/vworld \
+            target/x86_64-apple-darwin/release/vworld
+          cp target/aarch64-apple-darwin/release/vworld vworld
+
+      - name: Build Linux (gnu)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release
+          cp target/release/vworld vworld-linux
+
+      - name: Build Windows (msvc)
+        if: runner.os == 'Windows'
+        run: |
+          cargo build --release
+          copy target\release\vworld.exe vworld-windows.exe
+
+      - name: Upload artifacts (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            vworld-macos
+            vworld
+          retention-days: 1
+
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: vworld-linux
+          retention-days: 1
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: vworld-windows.exe
+          retention-days: 1
+
+  # ── 2) skill zip 패키징 + Release 게시 ────────────────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 버전 일치 검증 (tag ↔ Cargo.toml)
+        run: |
+          CARGO_VER=$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          TAG="${{ github.ref_name }}"
+          [ -n "${{ github.event.inputs.tag }}" ] && TAG="${{ github.event.inputs.tag }}"
+          TAG_VER="${TAG#v}"
+          echo "Cargo=$CARGO_VER  Tag=$TAG_VER"
+          if [ -n "$TAG_VER" ] && [ "$CARGO_VER" != "$TAG_VER" ]; then
+            echo "::error::버전 불일치 — Cargo.toml($CARGO_VER) ≠ tag($TAG_VER)"; exit 1
+          fi
+          echo "RELEASE_TAG=${TAG:-v$CARGO_VER}" >> "$GITHUB_ENV"
+
+      - name: 빌드 자산 수집
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts   # artifacts/{macos,linux,windows}/<파일>
+
+      - name: skill 번들 구성 (루트 평탄 구조)
+        run: |
+          set -e
+          mkdir -p bundle/app bundle/references/data
+          cp SKILL.md INSTALL.md bundle/ 2>/dev/null || true
+          cp app/config.toml.example bundle/app/
+          cp artifacts/macos/vworld-macos       bundle/app/
+          cp artifacts/macos/vworld             bundle/app/
+          cp artifacts/linux/vworld-linux       bundle/app/
+          cp artifacts/windows/vworld-windows.exe bundle/app/
+          cp -R references/docs bundle/references/docs
+          cp references/data/*.tsv bundle/references/data/   # sqlite 제외
+          chmod +x bundle/app/vworld bundle/app/vworld-macos bundle/app/vworld-linux
+          (cd bundle && zip -r ../vworld-skill.zip .)
+          ls -la vworld-skill.zip
+
+      - name: GitHub Release 게시
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: |
+            artifacts/macos/vworld-macos
+            artifacts/macos/vworld
+            artifacts/linux/vworld-linux
+            artifacts/windows/vworld-windows.exe
+            vworld-skill.zip

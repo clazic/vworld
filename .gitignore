@@ -15,6 +15,9 @@
 # ═════════════════════════════════════════════
 .*/
 **/.*/
+# 예외: GitHub Actions 워크플로(.github)는 추적해야 함
+!.github/
+!.github/**
 
 # ═════════════════════════════════════════════
 # 3. 작업 산출물 (실제 키가 박힐 수 있어 제외)
@@ -28,7 +31,13 @@ output/
 # ═════════════════════════════════════════════
 /target
 **/*.rs.bk
-Cargo.lock
+
+# 배포 바이너리 — CI(.github/workflows/release.yml)가 빌드해 Releases 로 배포 (git 미보관)
+# config.toml.example 등 app/ 내 텍스트 자산은 추적 유지 → 바이너리 4종만 제외
+/app/vworld
+/app/vworld-macos
+/app/vworld-linux
+/app/vworld-windows.exe
 
 # ═════════════════════════════════════════════
 # 5. 대용량 데이터·경계 (직접 적재 — opt-in 자원)
