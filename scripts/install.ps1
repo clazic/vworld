@@ -1,11 +1,11 @@
 # VWorld 설치 스크립트 (Windows PowerShell)
 #
 # 사용법:
-#   irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1 | iex
 #     → 기본: Claude Code 스킬을 user 범위(%USERPROFILE%\.claude\skills\vworld)로 설치
 #
 #   파라미터를 주려면 스크립트블록으로 실행:
-#     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1))) -Scope project
+#     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1))) -Scope project
 #
 # 파라미터:
 #   -Scope <user|project|cli>   설치 범위 (기본 user). cli = 단독 바이너리만.
@@ -87,6 +87,29 @@ function Install-PlaywrightMcp {
     }
 }
 
+# ── CLI 바이너리 등록 (스킬 설치 시에도 터미널에서 vworld 사용) ────────────────
+# Windows 는 심링크에 관리자/개발자모드 권한이 필요하므로, kosis 신버전처럼
+# 전용 폴더에 실파일 복사 후 User-scope PATH 에 자동 등록(권한 상승 불필요).
+function Register-CliBinary {
+    param([string]$SrcBin)
+    if (-not (Test-Path $SrcBin)) {
+        Write-Warn "CLI 등록 건너뜀 — 바이너리 없음: $SrcBin"
+        return
+    }
+    if (-not (Test-Path $INSTALL_DIR)) { New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null }
+    $dest = Join-Path $INSTALL_DIR $BINARY_NAME
+    Copy-Item -Path $SrcBin -Destination $dest -Force
+    Write-Ok "CLI 등록: $dest (어디서나 'vworld' 실행)"
+
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$INSTALL_DIR*") {
+        $newUserPath = if ([string]::IsNullOrEmpty($UserPath)) { $INSTALL_DIR } else { "$UserPath;$INSTALL_DIR" }
+        [Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
+        $env:Path += ";$INSTALL_DIR"
+        Write-Ok "User PATH 에 추가: $INSTALL_DIR (새 터미널부터 적용)"
+    }
+}
+
 # ── 스킬 설치 (user / project) ────────────────────────────────────────────────
 function Install-Skill {
     param([string]$ScopeArg)
@@ -137,6 +160,9 @@ function Install-Skill {
         Write-Info "프로젝트 스킬은 이 디렉터리에서 Claude Code 를 실행할 때만 인식됩니다:"
         Write-Info "  $((Get-Location).Path)"
     }
+
+    # 스킬 설치와 별개로 %LOCALAPPDATA%\vworld\vworld.exe 에 CLI 도 등록
+    Register-CliBinary -SrcBin (Join-Path (Join-Path $target "app") $BINARY_NAME)
 
     $script:SkillBin = Join-Path (Join-Path $target "app") $BINARY_NAME
 }

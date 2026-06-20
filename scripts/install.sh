@@ -4,7 +4,7 @@ set -euo pipefail
 # VWorld 설치 스크립트 (macOS / Linux)
 #
 # 사용법:
-#   curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 #     → 기본: Claude Code 스킬을 user 범위(~/.claude/skills/vworld)로 설치
 #
 #   VWORLD_SCOPE=project curl -fsSL .../install.sh | bash
@@ -109,6 +109,29 @@ maybe_install_playwright() {
   fi
 }
 
+# ── ~/.local/bin 으로 CLI 바이너리 등록 (스킬 설치 시에도 터미널에서 vworld 사용) ──
+# kosis 신버전 방식: 심링크 대신 실파일 복사 → 스킬을 지워도 CLI 가 살아있고,
+# Windows 와 동일한 모델(복사 + PATH)로 크로스플랫폼 분기를 단순화한다.
+link_cli_binary() {
+  local srcbin="$1"
+  [ -f "${srcbin}" ] || { _warn "CLI 등록 건너뜀 — 바이너리 없음: ${srcbin}"; return 0; }
+  mkdir -p "${INSTALL_DIR}"
+  if cp -f "${srcbin}" "${INSTALL_DIR}/${BINARY_NAME}"; then
+    chmod +x "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    _ok "CLI 등록: ${INSTALL_DIR}/${BINARY_NAME} (어디서나 '${BINARY_NAME}' 실행)"
+  else
+    _warn "CLI 등록 실패 — 수동 복사: cp '${srcbin}' '${INSTALL_DIR}/${BINARY_NAME}'"
+    return 0
+  fi
+  case ":${PATH}:" in
+    *":${INSTALL_DIR}:"*) ;;
+    *)
+      _warn "${INSTALL_DIR} 가 PATH 에 없습니다. ~/.zshrc(또는 ~/.bashrc)에 추가하세요:"
+      _warn "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+      ;;
+  esac
+}
+
 # ── 스킬 설치 (user / project) ────────────────────────────────────────────────
 install_skill() {
   local scope="$1" target
@@ -170,6 +193,9 @@ install_skill() {
     _info "프로젝트 스킬은 이 디렉터리에서 Claude Code 를 실행할 때만 인식됩니다:"
     _info "  $(pwd)"
   fi
+
+  # 스킬 설치와 별개로 ~/.local/bin/vworld 에 CLI 도 등록 (터미널 어디서나 사용)
+  link_cli_binary "${target}/app/${BINARY_NAME}"
 
   SKILL_BIN="${target}/app/${BINARY_NAME}"
 }

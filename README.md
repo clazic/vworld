@@ -13,13 +13,13 @@
 ### 방법 1 — 원클릭 설치 스크립트 (macOS / Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1 | iex
 ```
 
 ### 방법 2 — 사전빌드 바이너리 직접 다운로드
@@ -31,7 +31,7 @@ irm https://raw.githubusercontent.com/clazic/vworld/main/install.ps1 | iex
 | Linux x86_64 (glibc ≥ 2.34) | `vworld-linux` | https://raw.githubusercontent.com/clazic/vworld/main/skills/app/vworld-linux |
 | Windows x86_64 | `vworld-windows.exe` | https://raw.githubusercontent.com/clazic/vworld/main/skills/app/vworld-windows.exe |
 
-다운로드 후 바이너리와 같은 디렉터리에 `app/config.toml`(설정 템플릿)을 배치하고 실행 권한을 부여합니다.
+다운로드 후 실행 권한을 부여합니다. 인증키는 첫 실행 시 `vworld config add-key`로 등록하면 `~/.vworld/config.toml`에 저장됩니다(바이너리 옆에 설정파일을 둘 필요 없음).
 
 ```bash
 # macOS / Linux
@@ -80,19 +80,22 @@ vworld config add-key <발급받은_KEY> --alias main
 # 도메인 등록 키라면 referer 추가
 vworld config add-key <KEY> --alias main --referer https://your-domain.com
 
-vworld config list-keys    # 마스킹 목록 확인
-vworld config test-keys    # 실 호출 유효성 검증
-vworld config path         # config.toml 위치 확인
+vworld config list-keys        # 마스킹 목록 확인
+vworld config remove-key 0     # 인덱스(또는 키 값)로 제거
+vworld config test-keys        # 실 호출 유효성 검증
+vworld config path             # config.toml 위치 확인
 ```
 
 ### config.toml 위치
 
-설정 파일은 **바이너리 옆 `app/config.toml`** 을 우선 탐색합니다. 설치 스크립트는 바이너리와 함께 `config.toml` 템플릿을 자동 배치합니다.
+설정 파일은 바이너리 위치와 무관하게 **사용자 홈의 `~/.vworld/config.toml`** 에 저장됩니다.
 
-| OS | 기본 설치 경로 |
+| OS | 기본 설정 경로 |
 |----|--------------|
-| macOS / Linux | `~/.local/bin/vworld` (바이너리), `~/.local/bin/app/config.toml` |
-| Windows | `%LOCALAPPDATA%\vworld\vworld.exe`, `%LOCALAPPDATA%\vworld\app\config.toml` |
+| macOS / Linux | `~/.vworld/config.toml` |
+| Windows | `%USERPROFILE%\.vworld\config.toml` |
+
+`--config <경로>`로 다른 파일을 지정할 수도 있습니다(지정 시 해당 파일이 없으면 에러).
 
 ---
 
