@@ -1,6 +1,6 @@
 [package]
 name = "vworld"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "VWorld OpenAPI CLI — 자기완결 단일 바이너리 (kosis 동시성 패턴 차용)"
 license = "MIT"
