@@ -24,6 +24,7 @@ shapefile = "0.6"
 encoding_rs = "0.8"
 rusqlite = { version = "0.31", features = ["bundled"] }
 calamine = "0.26"
+self_update = { version = "0.44", default-features = false, features = ["rustls", "compression-flate2", "ureq"] }
 
 [dev-dependencies]
 mockito = "1"

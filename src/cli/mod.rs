@@ -6,6 +6,7 @@ pub mod config_cmds;
 pub mod data_cmds;
 pub mod embed_cmds;
 pub mod image_cmds;
+pub mod update_cmds;
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
@@ -102,6 +103,9 @@ pub enum Commands {
     /// 설정·키 관리
     #[command(subcommand)]
     Config(config_cmds::ConfigCmd),
+
+    /// 자가 업데이트 (GitHub Releases)
+    Update(update_cmds::UpdateArgs),
 }
 
 /// 최상위 라우터.
@@ -128,5 +132,6 @@ pub async fn run(cli: Cli) -> Result<()> {
         Commands::Batch(a) => data_cmds::run_batch(g, a).await,
         Commands::HjdDb(c) => data_cmds::run_hjd_db(g, c).await,
         Commands::Config(c) => config_cmds::run(g, c).await,
+        Commands::Update(a) => update_cmds::run_update(a).await,
     }
 }

@@ -15,6 +15,7 @@ mod ned_registry;
 mod output;
 mod shp;
 mod twod_registry;
+mod update;
 
 use clap::Parser;
 use cli::Cli;
@@ -34,12 +35,17 @@ fn main() -> ExitCode {
         }
     };
 
-    match runtime.block_on(cli::run(cli)) {
+    let exit = match runtime.block_on(cli::run(cli)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             // 에러는 JSON 친화 형식으로 stderr 출력 (§5 출력 규약).
             output::print_error(&e);
             ExitCode::FAILURE
         }
-    }
+    };
+
+    // 평소 실행 시 하루 1회 버전 감지 — best-effort, 종료코드와 독립.
+    update::maybe_notify();
+
+    exit
 }

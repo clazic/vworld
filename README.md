@@ -61,6 +61,27 @@ cargo build --release
 
 ---
 
+## 업데이트
+
+설치한 vworld는 `vworld update`로 GitHub Releases의 최신 버전을 받아 **자가 교체**합니다.
+
+```bash
+vworld update                  # 최신 버전으로 다운로드·교체
+vworld update --check          # 새 버전 존재 여부만 확인 (교체 안 함)
+vworld update --version v0.2.0 # 특정 버전으로 교체
+vworld update --yes            # 확인 프롬프트 생략 (CI·비대화형)
+```
+
+평소 명령 실행 시 **하루 1회** 최신 버전을 자동 감지해, 새 버전이 있으면 알림만 출력합니다(다운로드는 하지 않음). 알림은 `stderr`로 나가 명령 출력(JSON 등)을 오염시키지 않습니다. 자동 감지를 끄려면:
+
+```bash
+export VWORLD_NO_UPDATE_CHECK=1   # (CI 환경에서는 자동 생략)
+```
+
+> **스킬 모드 주의**: 스킬(`~/.claude/skills/vworld/app/`)로 설치한 경우 `update`는 **실행 중인 바이너리 1개**만 교체합니다. OS별 사본·`~/.local/bin` 사본까지 모두 갱신하려면 설치 스크립트를 다시 실행하세요.
+
+---
+
 ## VWorld OpenAPI 인증키 발급
 
 이 CLI는 [VWorld](https://www.vworld.kr)(국토교통부 공간정보 오픈플랫폼)의 OpenAPI를 호출하므로 **본인 명의의 인증키**가 필요합니다. 발급은 무료입니다. 이 저장소에는 어떠한 키도 포함되어 있지 않습니다.
