@@ -19,6 +19,7 @@ set -euo pipefail
 #   VWORLD_PLAYWRIGHT  1/yes 이면 Playwright MCP 설치 시도 (claude CLI 필요)
 #   VWORLD_DIR         cli 모드 바이너리 설치 디렉터리 (기본 ~/.local/bin)
 #   VWORLD_ZIP_URL     스킬 zip URL 오버라이드 (기본: GitHub Releases latest)
+#   VWORLD_API_KEY     설정 시 설치 후 인증키 자동 등록 (비대화형에서도 키 주입)
 
 REPO="clazic/vworld"
 # 바이너리·zip 은 모두 GitHub Releases 자산에서 받는다 (git 에 바이너리 미보관, CI 빌드).
@@ -32,7 +33,6 @@ SKILL_NAME="vworld"
 DEFAULT_DIR="${HOME}/.local/bin"
 INSTALL_DIR="${VWORLD_DIR:-${DEFAULT_DIR}}"
 BINARY_NAME="vworld"
-CONFIG_SUBDIR="app"  # 바이너리 옆 app/ 에 config.toml 배치 (CLI 탐색 규칙)
 
 # ── 색상 출력 헬퍼 ────────────────────────────────────────────────────────────
 _info()  { printf '\033[1;34m[vworld]\033[0m %s\n' "$*"; }
@@ -219,38 +219,13 @@ install_skill() {
 # ── 단독 CLI 바이너리 설치 (cli) ──────────────────────────────────────────────
 install_cli() {
   mkdir -p "${INSTALL_DIR}"
-  mkdir -p "${INSTALL_DIR}/${CONFIG_SUBDIR}"
 
-  local binary_path config_path
+  local binary_path
   binary_path="${INSTALL_DIR}/${BINARY_NAME}"
-  config_path="${INSTALL_DIR}/${CONFIG_SUBDIR}/config.toml"
 
   _info "바이너리 다운로드 중: ${REMOTE_BINARY} (Releases)"
   if ! curl -fL "${REL_BASE}/${REMOTE_BINARY}" -o "${binary_path}"; then
     _err "바이너리 다운로드 실패. Releases 자산을 확인하세요: ${REL_BASE}/${REMOTE_BINARY}"
-  fi
-
-  if [ -f "${config_path}" ]; then
-    _warn "기존 config.toml 발견 — 덮어쓰지 않습니다: ${config_path}"
-  else
-    _info "config.toml 템플릿 생성: ${config_path}"
-    cat > "${config_path}" <<'EOF'
-# VWorld CLI 설정 — 본인의 VWorld OpenAPI 인증키를 입력하세요.
-#
-# 1) 키 발급: https://www.vworld.kr → 오픈API → 인증키 신청
-# 2) 등록(권장): vworld config add-key <발급받은_KEY> --alias main
-# 3) 또는 아래 [[keys]] 블록의 주석을 풀고 직접 입력
-#
-# 도메인 등록 키면 referer에 등록 도메인을 적습니다(무도메인 서버 키는 생략).
-
-# [[keys]]
-# key = "여기에-발급받은-인증키"
-# referer = "https://your-domain.com"
-
-# [[keys]]
-# key = "두-번째-키"
-# alias = "key2"
-EOF
   fi
 
   chmod +x "${binary_path}"
@@ -261,7 +236,7 @@ EOF
   fi
 
   _ok "설치 완료: ${binary_path}"
-  _ok "설정 파일: ${config_path}"
+  # 인증키는 바이너리 옆이 아니라 ~/.vworld/config.toml 에 저장된다(config add-key 가 자동 생성).
 
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;
@@ -296,13 +271,42 @@ else
   _warn "--version 실행 실패. 경로를 확인하세요: ${SKILL_BIN} --version"
 fi
 
-# ── 키 등록 안내 ──────────────────────────────────────────────────────────────
+# ── 인증키 등록 (env > 대화형 입력 > 안내) ─────────────────────────────────────
+# 키는 ~/.vworld/config.toml 에 저장된다(바이너리가 실제로 읽는 경로).
 echo ""
-_ok "다음 단계: VWorld 인증키를 등록하세요."
-echo "  1) 키 발급: https://www.vworld.kr → 오픈API → 인증키 신청"
-echo "  2) 키 등록:"
-echo "       ${SKILL_BIN} config add-key <발급받은_KEY> --alias main"
-echo "  3) 유효성 확인:"
-echo "       ${SKILL_BIN} config test-keys"
+_registered=""
+if [ -n "${SKILL_BIN}" ] && [ -n "${VWORLD_API_KEY:-}" ]; then
+  _info "VWORLD_API_KEY 로 인증키 등록 중..."
+  if "${SKILL_BIN}" config add-key "${VWORLD_API_KEY}" --alias main >/dev/null 2>&1; then
+    _ok "인증키 등록 완료 (~/.vworld/config.toml)"; _registered=1
+  else
+    _warn "인증키 등록 실패 — 수동: ${SKILL_BIN} config add-key <KEY> --alias main"
+  fi
+elif [ -n "${SKILL_BIN}" ] && _tty_usable; then
+  _key=""
+  {
+    printf '\nVWorld 인증키를 지금 등록하시겠어요? (없으면 Enter 로 건너뛰기)\n'
+    printf '키 발급: https://www.vworld.kr → 오픈API → 인증키 신청\n'
+    printf '인증키 입력: '
+  } > /dev/tty 2>/dev/null || true
+  read _key < /dev/tty 2>/dev/null || _key=""
+  if [ -n "${_key}" ]; then
+    if "${SKILL_BIN}" config add-key "${_key}" --alias main >/dev/null 2>&1; then
+      _ok "인증키 등록 완료 (~/.vworld/config.toml)"; _registered=1
+    else
+      _warn "인증키 등록 실패 — 수동: ${SKILL_BIN} config add-key <KEY> --alias main"
+    fi
+  fi
+fi
+
+if [ -z "${_registered}" ]; then
+  _ok "다음 단계: VWorld 인증키를 등록하세요."
+  echo "  1) 키 발급: https://www.vworld.kr → 오픈API → 인증키 신청"
+  echo "  2) 키 등록: ${SKILL_BIN} config add-key <발급받은_KEY> --alias main"
+  echo "  3) 유효성 확인: ${SKILL_BIN} config test-keys"
+else
+  _info "유효성 확인: ${SKILL_BIN} config test-keys"
+fi
+
 echo ""
 _ok "설치가 완료되었습니다. 자세한 사용법: https://github.com/clazic/vworld"

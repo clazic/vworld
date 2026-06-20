@@ -62,7 +62,7 @@ impl Config {
     }
 }
 
-/// config 경로 결정: `--config <path>` > `current_exe()/app/config.toml`(기본).
+/// config 경로 결정: `--config <path>` > `~/.vworld/config.toml`(기본).
 ///
 /// `--config` 지정 시 파일이 없으면 즉시 에러(기본 경로로 폴백하지 않음 — 설계 Step 1).
 pub fn resolve_config_path(override_path: Option<&Path>) -> Result<PathBuf> {

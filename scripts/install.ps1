@@ -12,6 +12,7 @@
 #   -Playwright                 Playwright MCP 설치 시도 (claude CLI 필요)
 #   -Dir <경로>                 cli 모드 바이너리 설치 디렉터리 (기본 $env:LOCALAPPDATA\vworld)
 #   -Version <태그>             릴리스 태그 고정 (예: v0.1.0). 비우면 latest
+#   -ApiKey <키>                설치 후 인증키 자동 등록 (비대화형에서도 키 주입)
 #   -ZipUrl <URL>               스킬 zip URL 오버라이드 (기본: GitHub Releases latest)
 
 param(
@@ -20,6 +21,7 @@ param(
     [switch]$Playwright,
     [string]$Dir = "",
     [string]$Version = "",
+    [string]$ApiKey = "",
     [string]$ZipUrl = ""
 )
 
@@ -38,7 +40,6 @@ if ($ZipUrl -eq "") {
 $SkillName = "vworld"
 $DEFAULT_DIR = Join-Path $env:LOCALAPPDATA "vworld"
 $INSTALL_DIR = if ($Dir -ne "") { $Dir } else { $DEFAULT_DIR }
-$CONFIG_SUBDIR = "app"
 $BINARY_NAME = "vworld.exe"
 $RemoteBinary = "vworld-windows.exe"
 
@@ -186,12 +187,9 @@ function Install-Skill {
 
 # ── 단독 CLI 바이너리 설치 (cli) ──────────────────────────────────────────────
 function Install-Cli {
-    $ConfigDir = Join-Path $INSTALL_DIR $CONFIG_SUBDIR
     $BinaryPath = Join-Path $INSTALL_DIR $BINARY_NAME
-    $ConfigPath = Join-Path $ConfigDir "config.toml"
 
     if (-not (Test-Path $INSTALL_DIR)) { New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null }
-    if (-not (Test-Path $ConfigDir))   { New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null }
 
     $BinaryUrl = "$REL_BASE/$RemoteBinary"
     Write-Info "바이너리 다운로드 중: $RemoteBinary (Releases)"
@@ -199,29 +197,6 @@ function Install-Cli {
         Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UseBasicParsing
     } catch {
         Write-Err "바이너리 다운로드 실패. Releases 자산을 확인하세요.`n  URL: $BinaryUrl`n  오류: $_"
-    }
-
-    if (Test-Path $ConfigPath) {
-        Write-Warn "기존 config.toml 발견 — 덮어쓰지 않습니다: $ConfigPath"
-    } else {
-        Write-Info "config.toml 템플릿 생성: $ConfigPath"
-        @'
-# VWorld CLI 설정 — 본인의 VWorld OpenAPI 인증키를 입력하세요.
-#
-# 1) 키 발급: https://www.vworld.kr -> 오픈API -> 인증키 신청
-# 2) 등록(권장): vworld config add-key <발급받은_KEY> --alias main
-# 3) 또는 아래 [[keys]] 블록의 주석을 풀고 직접 입력
-#
-# 도메인 등록 키면 referer에 등록 도메인을 적습니다(무도메인 서버 키는 생략).
-
-# [[keys]]
-# key = "여기에-발급받은-인증키"
-# referer = "https://your-domain.com"
-
-# [[keys]]
-# key = "두-번째-키"
-# alias = "key2"
-'@ | Set-Content -Path $ConfigPath -Encoding UTF8
     }
 
     Write-Info "SmartScreen 경고가 뜨면: '추가 정보' → '실행' 을 클릭하세요."
@@ -235,7 +210,7 @@ function Install-Cli {
     }
 
     Write-Ok "설치 완료: $BinaryPath"
-    Write-Ok "설정 파일: $ConfigPath"
+    # 인증키는 바이너리 옆이 아니라 %USERPROFILE%\.vworld\config.toml 에 저장된다(config add-key 가 자동 생성).
     $script:SkillBin = $BinaryPath
 }
 
@@ -257,13 +232,37 @@ try {
     Write-Warn "--version 실행 실패. 경로를 확인하세요: $($script:SkillBin) --version"
 }
 
-# ── 키 등록 안내 ──────────────────────────────────────────────────────────────
+# ── 인증키 등록 (-ApiKey > 대화형 입력 > 안내) ─────────────────────────────────
+# 키는 %USERPROFILE%\.vworld\config.toml 에 저장된다(바이너리가 실제로 읽는 경로).
 Write-Host ""
-Write-Ok "다음 단계: VWorld 인증키를 등록하세요."
-Write-Host "  1) 키 발급: https://www.vworld.kr -> 오픈API -> 인증키 신청"
-Write-Host "  2) 키 등록:"
-Write-Host "       $($script:SkillBin) config add-key <발급받은_KEY> --alias main"
-Write-Host "  3) 유효성 확인:"
-Write-Host "       $($script:SkillBin) config test-keys"
+$registered = $false
+if ($script:SkillBin -and $ApiKey -ne "") {
+    Write-Info "-ApiKey 로 인증키 등록 중..."
+    try {
+        & $script:SkillBin config add-key $ApiKey --alias main | Out-Null
+        Write-Ok "인증키 등록 완료 (%USERPROFILE%\.vworld\config.toml)"; $registered = $true
+    } catch { Write-Warn "인증키 등록 실패 — 수동: $($script:SkillBin) config add-key <KEY> --alias main" }
+} elseif ($script:SkillBin -and -not [Console]::IsInputRedirected) {
+    Write-Host ""
+    Write-Host "VWorld 인증키를 지금 등록하시겠어요? (없으면 Enter 로 건너뛰기)"
+    Write-Host "키 발급: https://www.vworld.kr -> 오픈API -> 인증키 신청"
+    $key = Read-Host "인증키 입력"
+    if ($key -ne "") {
+        try {
+            & $script:SkillBin config add-key $key --alias main | Out-Null
+            Write-Ok "인증키 등록 완료 (%USERPROFILE%\.vworld\config.toml)"; $registered = $true
+        } catch { Write-Warn "인증키 등록 실패 — 수동: $($script:SkillBin) config add-key <KEY> --alias main" }
+    }
+}
+
+if (-not $registered) {
+    Write-Ok "다음 단계: VWorld 인증키를 등록하세요."
+    Write-Host "  1) 키 발급: https://www.vworld.kr -> 오픈API -> 인증키 신청"
+    Write-Host "  2) 키 등록: $($script:SkillBin) config add-key <발급받은_KEY> --alias main"
+    Write-Host "  3) 유효성 확인: $($script:SkillBin) config test-keys"
+} else {
+    Write-Info "유효성 확인: $($script:SkillBin) config test-keys"
+}
+
 Write-Host ""
 Write-Ok "설치가 완료되었습니다. 자세한 사용법: https://github.com/clazic/vworld"
