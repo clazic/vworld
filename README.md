@@ -1,5 +1,10 @@
 # vworld
 
+[![release](https://github.com/clazic/vworld/actions/workflows/release.yml/badge.svg)](https://github.com/clazic/vworld/actions/workflows/release.yml)
+[![version](https://img.shields.io/github/v/release/clazic/vworld?sort=semver)](https://github.com/clazic/vworld/releases/latest)
+[![license](https://img.shields.io/github/license/clazic/vworld)](LICENSE)
+![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
+
 **VWorld(국가공간정보포털) OpenAPI를 감싼 자기완결 Rust CLI.**
 
 지오코딩 · 역지오코딩 · 장소 검색 · 2D 데이터레이어(158종) · 국가중점데이터(NED 115종) · WMS/WFS · WMTS 타일 · StaticMap · 범례(SLD) · 3D 분석 지도 임베드(15종) · 연속지적도 DXF/SHP 내보내기까지 — 추가 런타임 없이 단일 바이너리 하나로 동작합니다.
