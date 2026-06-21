@@ -5,21 +5,42 @@ pub const BLUES:  [&str; 7] = ["#eff3ff","#c6dbef","#9ecae1","#6baed6","#4292c6"
 pub const GREENS: [&str; 7] = ["#edf8e9","#c7e9c0","#a1d99b","#74c476","#41ab5d","#238b45","#005a32"];
 pub const REDS:   [&str; 7] = ["#fff5f0","#fee0d2","#fcbba1","#fc9272","#fb6a4a","#cb181d","#67000d"];
 pub const VIRIDIS:[&str; 7] = ["#440154","#3b528b","#21908c","#27ad81","#5dc963","#aadc32","#fde725"];
+pub const RDYLBU: [&str; 7] = ["#2c7bb6","#abd9e9","#e0f3f8","#ffffbf","#fdae61","#f46d43","#d7191c"];
 
 pub fn pick_colors(ramp: &str, n: usize) -> Vec<&'static str> {
-    let palette: &[&str] = match ramp.to_lowercase().as_str() {
+    let key = ramp.to_lowercase();
+    let palette: &[&str] = match key.as_str() {
         "blues"   => &BLUES,
         "greens"  => &GREENS,
         "reds"    => &REDS,
         "viridis" => &VIRIDIS,
+        "rdylbu"  => &RDYLBU,
         _         => &YLORRD,
     };
     let n = n.min(palette.len()).max(1);
-    if n == 1 { return vec![palette[0]]; }
+    let last = palette.len() - 1;
+    // diverging(rdylbu)은 양끝이 의미를 가지므로 풀레인지, sequential은 양끝 극단(거의 흰색·검정) 회피.
+    let diverging = key == "rdylbu";
+    let (lo, hi) = if diverging || n > last - 1 { (0, last) } else { (1, last - 1) };
+    if n == 1 { return vec![palette[(lo + hi) / 2]]; }
     (0..n).map(|i| {
-        let idx = (i * (palette.len() - 1)) / (n - 1);
+        let idx = lo + (i * (hi - lo)) / (n - 1);
         palette[idx]
     }).collect()
+}
+
+/// 정수 + 천단위 콤마 포맷("311172.0" → "311,172").
+fn fmt_num(v: f64) -> String {
+    let n = v.round() as i64;
+    let s = n.abs().to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    if n < 0 { format!("-{out}") } else { out }
 }
 
 pub fn compute_breaks(values: &[f64], n: usize, method: &str) -> Vec<f64> {
@@ -54,32 +75,44 @@ pub fn gen_color_fn_js(breaks: &[f64], colors: &[&str], no_data_color: &str) -> 
     js
 }
 
-pub fn gen_legend_html(breaks: &[f64], colors: &[&str], value_field: &str, no_data_color: &str) -> String {
+pub fn gen_legend_html(breaks: &[f64], colors: &[&str], title: &str, no_data_color: &str, vmin: f64, vmax: f64, pos: &str) -> String {
+    // 위치 — 4모서리. 제목 + 최저·최고 요약줄 + 구분선 + 색 스와치(인라인 <i>) + 구간 라벨.
+    let pos_css = match pos {
+        "top-left" => "left:20px;top:20px",
+        "bottom-right" => "right:20px;bottom:20px",
+        "bottom-left" => "left:20px;bottom:20px",
+        _ => "right:20px;top:20px",
+    };
     let mut html = format!(
-        "<div id=\"vwLegend\" style=\"position:fixed;right:24px;top:80px;z-index:100000;background:#fff;border:1px solid #e5e8eb;border-radius:16px;padding:16px 20px;box-shadow:0 4px 16px rgba(0,0,0,.12);font-family:Pretendard,sans-serif;min-width:160px\">\
-        <div style=\"font:700 14px Pretendard;color:#191f28;margin-bottom:12px\">{value_field}</div>"
+        "<div id=\"vwLegend\" style=\"position:fixed;{pos_css};z-index:100000;\
+         background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;padding:14px 16px;\
+         box-shadow:0 6px 22px rgba(0,0,0,.14);font-family:Pretendard,-apple-system,sans-serif;min-width:152px\">\
+         <div style=\"font:700 15px Pretendard;color:#191f28;margin-bottom:4px\">{title}</div>\
+         <div style=\"font:500 12px Pretendard;color:#8b95a1;margin-bottom:9px;font-variant-numeric:tabular-nums\">최저 {} · 최고 {}</div>\
+         <div style=\"border-top:1px solid #eef0f2;margin:0 0 10px\"></div>",
+        fmt_num(vmin), fmt_num(vmax)
     );
     for i in 0..colors.len() {
         let label = if breaks.is_empty() {
             "전체".to_string()
         } else if i == 0 {
-            format!("< {:.1}", breaks[0])
+            format!("~ {}", fmt_num(breaks[0]))
         } else if i < breaks.len() {
-            format!("{:.1} – {:.1}", breaks[i-1], breaks[i])
+            format!("{} ~ {}", fmt_num(breaks[i - 1]), fmt_num(breaks[i]))
         } else {
-            format!("≥ {:.1}", breaks[i-1])
+            format!("{} ~", fmt_num(breaks[i - 1]))
         };
         html.push_str(&format!(
-            "<div style=\"display:flex;align-items:center;gap:10px;margin-bottom:6px\">\
-            <span style=\"display:inline-block;width:18px;height:18px;border-radius:5px;background:{};flex-shrink:0\"></span>\
-            <span style=\"font:500 13px Pretendard;color:#4e5968\">{label}</span></div>",
+            "<div style=\"font:500 12.5px Pretendard;color:#4e5968;margin:4px 0;font-variant-numeric:tabular-nums\">\
+            <i style=\"display:inline-block;width:14px;height:14px;border-radius:3px;background:{};margin-right:7px;\
+            vertical-align:-2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)\"></i>{label}</div>",
             colors[i]
         ));
     }
     html.push_str(&format!(
-        "<div style=\"display:flex;align-items:center;gap:10px;margin-top:4px\">\
-        <span style=\"display:inline-block;width:18px;height:18px;border-radius:5px;background:{no_data_color};flex-shrink:0\"></span>\
-        <span style=\"font:500 13px Pretendard;color:#8b95a1\">값 없음</span></div></div>"
+        "<div style=\"font:500 12.5px Pretendard;color:#adb5bd;margin:4px 0\">\
+        <i style=\"display:inline-block;width:14px;height:14px;border-radius:3px;background:{no_data_color};margin-right:7px;\
+        vertical-align:-2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)\"></i>값 없음</div></div>"
     ));
     html
 }

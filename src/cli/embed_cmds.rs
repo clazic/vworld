@@ -116,6 +116,15 @@ pub struct MapArgs {
     /// 범례 표시(choropleth).
     #[arg(long)]
     pub legend: bool,
+    /// 범례 제목(미지정 시 --value-field 값). 예: --legend-title 인구
+    #[arg(long)]
+    pub legend_title: Option<String>,
+    /// 범례 위치: top-right(기본)|top-left|bottom-right|bottom-left
+    #[arg(long, default_value = "top-right")]
+    pub legend_pos: String,
+    /// 주소 검색창을 숨긴다(데이터 시각화 전용 지도).
+    #[arg(long)]
+    pub no_search: bool,
     /// 생성 HTML을 OS 기본 브라우저로 열기(-o 저장된 경우만).
     #[arg(long)]
     pub open: bool,
@@ -1276,6 +1285,7 @@ async fn run_choropleth(g: &GlobalArgs, a: &MapArgs, key: &str, _domain: &str) -
 
     let colors = choropleth::pick_colors(&a.color_scale, breaks.len() + 1);
     let color_fn_js = choropleth::gen_color_fn_js(&breaks, &colors, &a.no_data_color);
+    let opacity_hover = (a.opacity + 0.15).min(1.0);
 
     // GeoJSON 안전 주입
     let geojson_safe = geojson_raw.replace("</", "<\\/");
@@ -1288,15 +1298,26 @@ async fn run_choropleth(g: &GlobalArgs, a: &MapArgs, key: &str, _domain: &str) -
 {color_fn_js}\n\
 function hexA(hex,a){{hex=hex.replace('#','');if(hex.length===3)hex=hex.split('').map(function(c){{return c+c;}}).join('');var r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16);return 'rgba('+r+','+g+','+b+','+a+')';}}\n\
 var choroSource=new ol.source.Vector({{features:new ol.format.GeoJSON().readFeatures(CHORO_DATA,{{dataProjection:'EPSG:4326',featureProjection:'EPSG:3857'}})}});\n\
-var choroLayer=new ol.layer.Vector({{source:choroSource,style:function(f){{var v=f.get('{vf}');v=(v==null?null:parseFloat(v));if(isNaN(v))v=null;return new ol.style.Style({{fill:new ol.style.Fill({{color:hexA(vwColor(v),{opacity})}}),stroke:new ol.style.Stroke({{color:'#333',width:1}})}});}}}});\n\
+var _hovered=null;\n\
+var choroLayer=new ol.layer.Vector({{source:choroSource,style:function(f){{var v=f.get('{vf}');v=(v==null?null:parseFloat(v));if(isNaN(v))v=null;var h=(f===_hovered);return new ol.style.Style({{fill:new ol.style.Fill({{color:hexA(vwColor(v),h?{opacity_hover}:{opacity})}}),stroke:new ol.style.Stroke({{color:h?'#191f28':'#ffffff',width:h?2.6:1.2}}),zIndex:h?10:1}});}}}});\n\
 map.getLayers().insertAt(3,choroLayer);\n\
+map.on('pointermove',function(evt){{var hit=null;map.forEachFeatureAtPixel(evt.pixel,function(f){{hit=f;return true;}},{{layerFilter:function(l){{return l===choroLayer;}}}});if(hit!==_hovered){{_hovered=hit;choroLayer.changed();}}map.getTargetElement().style.cursor=hit?'pointer':'';}});\n\
 var ext=choroSource.getExtent();if(ext&&isFinite(ext[0])){{map.getView().fit(ext,{{padding:[40,40,40,40],maxZoom:14}});}}\n\
-map.on('click',function(evt){{map.forEachFeatureAtPixel(evt.pixel,function(f){{var v=f.get('{vf}');var nm=f.get('adm_nm')||f.get('name')||f.get('NAME')||'';var msg=(nm?nm+': ':'')+( v!=null?v:'(값 없음)');var t=document.getElementById('vwSearchToast');if(t){{t.textContent=msg;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(function(){{t.style.display='none';}},3000);}}return true;}},{{layerFilter:function(l){{return l===choroLayer;}}}});}} );"
+map.on('click',function(evt){{map.forEachFeatureAtPixel(evt.pixel,function(f){{var v=f.get('{vf}');var nm=f.get('adm_nm')||f.get('name')||f.get('NAME')||'';var msg=(nm?nm+': ':'')+( v!=null?Number(v).toLocaleString('en-US'):'(값 없음)');var t=document.getElementById('vwSearchToast');if(t){{t.textContent=msg;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(function(){{t.style.display='none';}},3000);}}return true;}},{{layerFilter:function(l){{return l===choroLayer;}}}});}} );"
     );
 
     // 범례 HTML
     let legend_html = if a.legend {
-        choropleth::gen_legend_html(&breaks, &colors, value_field, &a.no_data_color)
+        let title = a.legend_title.as_deref().unwrap_or(value_field);
+        let (vmin, vmax) = if values.is_empty() {
+            (0.0, 0.0)
+        } else {
+            (
+                values.iter().cloned().fold(f64::INFINITY, f64::min),
+                values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            )
+        };
+        choropleth::gen_legend_html(&breaks, &colors, title, &a.no_data_color, vmin, vmax, &a.legend_pos)
     } else {
         String::new()
     };
@@ -1319,7 +1340,7 @@ map.on('click',function(evt){{map.forEachFeatureAtPixel(evt.pixel,function(f){{v
     // VECTOR_HTML 기반으로 choropleth 스크립트 삽입.
     // 반드시 `var map=new ol.Map(...)` 생성 이후에 삽입해야 map.getLayers()가 동작한다.
     // map 생성 직후의 `function setBase(bs){`를 anchor로 그 앞에 주입한다.
-    let html = VECTOR_HTML
+    let mut html = VECTOR_HTML
         .replace("__KEY__", key)
         .replace("__LON__", &lon)
         .replace("__LAT__", &lat)
@@ -1329,6 +1350,13 @@ map.on('click',function(evt){{map.forEachFeatureAtPixel(evt.pixel,function(f){{v
             &format!("{choro_script}\n  function setBase(bs){{"),
         )
         .replace("</body>", &format!("{legend_html}</body>"));
+    // --no-search: 주소 검색창·토스트 숨김(데이터 시각화 전용).
+    if a.no_search {
+        html = html.replace(
+            "</head>",
+            "<style>#vwSearch{display:none!important}</style></head>",
+        );
+    }
 
     // --open 처리
     let open_after = a.open && a.output.is_some();
