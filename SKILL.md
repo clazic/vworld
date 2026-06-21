@@ -167,10 +167,22 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 
 ### map choropleth 옵션
 - `--value-field <prop>`(필수): 색칠 기준 properties 수치 키(문자열 숫자도 파싱).
-- `--color-scale ylorrd|blues|greens|reds|viridis`(기본 ylorrd) / `--classes N`(기본 5).
+- `--color-scale ylorrd|blues|greens|reds|viridis|rdylbu`(기본 ylorrd) / `--classes N`(기본 5).
+  - `rdylbu`는 **diverging**(파랑↔빨강) 팔레트로 양끝 풀레인지, 나머지(sequential)는 거의 흰색·검정 극단을 자동 회피.
 - `--class-method quantile|equal`(기본 quantile) / `--breaks a,b,c,d`(수동 경계, 주면 method 무시).
-- `--no-data-color <hex>`(기본 #cccccc) / `--opacity 0-1`(기본 0.78) / `--legend`(토스 범례) / `--open`(브라우저 열기).
+- `--no-data-color <hex>`(기본 #cccccc) / `--opacity 0-1`(기본 0.78).
+- `--legend`(범례 표시) / `--legend-title <text>`(범례 제목, **한글 가능**, 미지정 시 --value-field 값) / `--legend-pos top-right|top-left|bottom-right|bottom-left`(기본 top-right).
+  - 범례 = 패널형(제목 + "최저 N · 최고 M" 요약 + 인라인 색 스와치 + 구간 라벨, 천단위 콤마).
+- `--no-search`(주소 검색창 숨김 — 데이터 시각화 전용) / `--open`(생성 HTML을 OS 기본 브라우저로).
+- 인터랙션(자동): **hover 강조**(테두리 진해짐+위로), 폴리곤 **클릭 시 값 토스트**(천단위 콤마), 흰색 경계선.
 - 색 구간·램프는 Rust에서 계산(결정적·테스트됨), JS는 룩업만 — 순수 ol9 + VWorld 타일이라 feature별 색이 100% 렌더(vw.ol3.Map의 setStyle 누락 이슈 회피).
+
+```bash
+# 예: 울산 구·군 인구 — diverging 색 + 한글 범례 우상단 + 검색창 숨김 + 자동 열기
+vworld map choropleth --geojson joined.geojson --value-field 인구 \
+  --color-scale rdylbu --classes 5 --legend --legend-title "울산 인구(명)" \
+  --legend-pos top-right --no-search --open -o map.html
+```
 
 ### data join 옵션
 - `--geojson`(경계) `--table`(통계 JSON 배열) `--on`(경계측 키, 기본 adm_cd) `--table-key`(통계측 키) `--table-value`(가져올 값) `--as`(주입 properties명) `-o`(출력).
