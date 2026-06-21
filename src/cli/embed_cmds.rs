@@ -90,6 +90,35 @@ pub struct MapArgs {
     /// 사전 경로 좌표 "lon,lat;lon,lat;…"(ol) — RouteMap 폴리라인 표시(최소 2점, EPSG:4326).
     #[arg(long)]
     pub route: Option<String>,
+
+    // --- choropleth ---
+    /// 색칠 기준 properties 수치 키 (choropleth 전용).
+    #[arg(long)]
+    pub value_field: Option<String>,
+    /// 색상 램프(choropleth): ylorrd(기본)|blues|greens|reds|viridis.
+    #[arg(long, default_value = "ylorrd")]
+    pub color_scale: String,
+    /// 구간 수(choropleth, 기본 5).
+    #[arg(long, default_value_t = 5u8)]
+    pub classes: u8,
+    /// 구간 분류 방법(choropleth): quantile(기본)|equal.
+    #[arg(long, default_value = "quantile")]
+    pub class_method: String,
+    /// 수동 경계값 "a,b,c,d"(choropleth). 지정 시 class-method 무시.
+    #[arg(long)]
+    pub breaks: Option<String>,
+    /// 값 없는 feature 색(choropleth, 기본 #cccccc).
+    #[arg(long, default_value = "#cccccc")]
+    pub no_data_color: String,
+    /// 채움 투명도(choropleth, 0-1, 기본 0.78).
+    #[arg(long, default_value_t = 0.78f32)]
+    pub opacity: f32,
+    /// 범례 표시(choropleth).
+    #[arg(long)]
+    pub legend: bool,
+    /// 생성 HTML을 OS 기본 브라우저로 열기(-o 저장된 경우만).
+    #[arg(long)]
+    pub open: bool,
 }
 
 /// 3D 분석·시뮬레이션 템플릿 — vworld 공식 코드샘플을 임베드(자기완결 단일 바이너리).
@@ -174,6 +203,7 @@ pub async fn run_map(g: &GlobalArgs, a: MapArgs) -> Result<()> {
         "text" => return run_text(g, &a, key, &domain),
         "controller" => return run_controller(g, &a, key, &domain),
         "vector" => return run_vector(g, &a, key, &domain).await,
+        "choropleth" => return run_choropleth(g, &a, key, &domain).await,
         _ => {}
     }
 
@@ -1202,4 +1232,127 @@ fn render_html(kind: &str, script_url: &str, center: &str, zoom: u32, init: &str
 </html>
 "#
     )
+}
+
+/// choropleth 지도 — VECTOR_HTML 기반, GeoJSON 오버레이 + 색 구간 스타일.
+async fn run_choropleth(g: &GlobalArgs, a: &MapArgs, key: &str, _domain: &str) -> Result<()> {
+    use super::choropleth;
+
+    let geojson_path = a.geojson.as_ref().ok_or_else(|| anyhow!("--geojson <PATH>가 필요합니다"))?;
+    let value_field = a.value_field.as_deref().ok_or_else(|| anyhow!("--value-field <PROP>가 필요합니다"))?;
+
+    let geojson_raw = std::fs::read_to_string(geojson_path)
+        .map_err(|e| anyhow!("GeoJSON 파일 읽기 실패: {e}"))?;
+
+    let geojson_val: serde_json::Value = serde_json::from_str(&geojson_raw)
+        .map_err(|e| anyhow!("GeoJSON 파싱 실패: {e}"))?;
+
+    // features에서 value_field 수치 수집 (문자열 숫자도 파싱, null/비숫자는 no-data)
+    let mut values: Vec<f64> = Vec::new();
+    if let Some(features) = geojson_val["features"].as_array() {
+        for f in features {
+            let v = &f["properties"][value_field];
+            let num = match v {
+                serde_json::Value::Number(n) => n.as_f64(),
+                serde_json::Value::String(s) => s.trim().parse::<f64>().ok(),
+                _ => None,
+            };
+            if let Some(n) = num {
+                values.push(n);
+            }
+        }
+    }
+
+    // 경계값 계산
+    let n = a.classes as usize;
+    let breaks: Vec<f64> = if let Some(breaks_str) = &a.breaks {
+        breaks_str
+            .split(',')
+            .filter_map(|s| s.trim().parse::<f64>().ok())
+            .collect()
+    } else {
+        choropleth::compute_breaks(&values, n, &a.class_method)
+    };
+
+    let colors = choropleth::pick_colors(&a.color_scale, breaks.len() + 1);
+    let color_fn_js = choropleth::gen_color_fn_js(&breaks, &colors, &a.no_data_color);
+
+    // GeoJSON 안전 주입
+    let geojson_safe = geojson_raw.replace("</", "<\\/");
+    let opacity = a.opacity;
+    let vf = value_field;
+
+    // choropleth 스크립트 블록
+    let choro_script = format!(
+        "var CHORO_DATA = {geojson_safe};\n\
+{color_fn_js}\n\
+function hexA(hex,a){{hex=hex.replace('#','');if(hex.length===3)hex=hex.split('').map(function(c){{return c+c;}}).join('');var r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16);return 'rgba('+r+','+g+','+b+','+a+')';}}\n\
+var choroSource=new ol.source.Vector({{features:new ol.format.GeoJSON().readFeatures(CHORO_DATA,{{dataProjection:'EPSG:4326',featureProjection:'EPSG:3857'}})}});\n\
+var choroLayer=new ol.layer.Vector({{source:choroSource,style:function(f){{var v=f.get('{vf}');v=(v==null?null:parseFloat(v));if(isNaN(v))v=null;return new ol.style.Style({{fill:new ol.style.Fill({{color:hexA(vwColor(v),{opacity})}}),stroke:new ol.style.Stroke({{color:'#333',width:1}})}});}}}});\n\
+map.getLayers().insertAt(3,choroLayer);\n\
+var ext=choroSource.getExtent();if(ext&&isFinite(ext[0])){{map.getView().fit(ext,{{padding:[40,40,40,40],maxZoom:14}});}}\n\
+map.on('click',function(evt){{map.forEachFeatureAtPixel(evt.pixel,function(f){{var v=f.get('{vf}');var nm=f.get('adm_nm')||f.get('name')||f.get('NAME')||'';var msg=(nm?nm+': ':'')+( v!=null?v:'(값 없음)');var t=document.getElementById('vwSearchToast');if(t){{t.textContent=msg;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(function(){{t.style.display='none';}},3000);}}return true;}},{{layerFilter:function(l){{return l===choroLayer;}}}});}} );"
+    );
+
+    // 범례 HTML
+    let legend_html = if a.legend {
+        choropleth::gen_legend_html(&breaks, &colors, value_field, &a.no_data_color)
+    } else {
+        String::new()
+    };
+
+    // 중심 좌표: --center 지정 시 사용, 없으면 GeoJSON extent 중심
+    let (lon, lat, zoom_str) = if let Some(c) = &a.center {
+        let parts: Vec<&str> = c.split(',').map(str::trim).collect();
+        match parts.as_slice() {
+            [lo, la] => (lo.to_string(), la.to_string(), a.zoom.to_string()),
+            _ => return Err(anyhow!("중심 좌표 형식 오류: '{c}'")),
+        }
+    } else if let Some((minx, miny, maxx, maxy)) = choropleth::compute_geojson_extent(&geojson_raw) {
+        let cx = (minx + maxx) / 2.0;
+        let cy = (miny + maxy) / 2.0;
+        (cx.to_string(), cy.to_string(), a.zoom.to_string())
+    } else {
+        ("126.978".to_string(), "37.5665".to_string(), a.zoom.to_string())
+    };
+
+    // VECTOR_HTML 기반으로 choropleth 스크립트 삽입.
+    // 반드시 `var map=new ol.Map(...)` 생성 이후에 삽입해야 map.getLayers()가 동작한다.
+    // map 생성 직후의 `function setBase(bs){`를 anchor로 그 앞에 주입한다.
+    let html = VECTOR_HTML
+        .replace("__KEY__", key)
+        .replace("__LON__", &lon)
+        .replace("__LAT__", &lat)
+        .replace("__ZOOM__", &zoom_str)
+        .replace(
+            "function setBase(bs){",
+            &format!("{choro_script}\n  function setBase(bs){{"),
+        )
+        .replace("</body>", &format!("{legend_html}</body>"));
+
+    // --open 처리
+    let open_after = a.open && a.output.is_some();
+
+    let meta = serde_json::json!({
+        "kind": "choropleth",
+        "value_field": value_field,
+        "classes": n,
+        "data_count": values.len(),
+        "colors": colors,
+    });
+    output_html(g, a, html, meta)?;
+
+    if open_after {
+        if let Some(path) = &a.output {
+            let path_str = path.to_string_lossy();
+            #[cfg(target_os = "macos")]
+            let _ = std::process::Command::new("open").arg(path_str.as_ref()).spawn();
+            #[cfg(target_os = "windows")]
+            let _ = std::process::Command::new("cmd").args(["/c", "start", path_str.as_ref()]).spawn();
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            let _ = std::process::Command::new("xdg-open").arg(path_str.as_ref()).spawn();
+        }
+    }
+
+    Ok(())
 }

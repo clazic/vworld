@@ -2,6 +2,7 @@
 //!
 //! 전역 플래그: `--concurrency`, `--pretty`, `--raw`, `--timing`, `--referer`, `--config`.
 
+pub mod choropleth;
 pub mod config_cmds;
 pub mod data_cmds;
 pub mod embed_cmds;
@@ -119,6 +120,7 @@ pub async fn run(cli: Cli) -> Result<()> {
             Some(data_cmds::DataSub::Layers(a)) => data_cmds::run_data_layers(g, a),
             Some(data_cmds::DataSub::Describe(a)) => data_cmds::run_data_describe(g, a),
             Some(data_cmds::DataSub::Fetch(a)) => data_cmds::run_data(g, a).await,
+            Some(data_cmds::DataSub::Join(a)) => data_cmds::run_data_join(g, a),
             None => data_cmds::run_data(g, top.fetch).await,
         },
         Commands::Ned(a) => data_cmds::run_ned(g, a).await,

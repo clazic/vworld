@@ -46,6 +46,9 @@ app/vworld [전역옵션] <명령> [인자]
 | "지도 띄우는 HTML" | `vworld map 2d --center 127,37.5 -o map.html` (3d/3dsim 가능) |
 | "2D 데이터지도(벡터/마커/차트/주제도)" | `vworld map ol\|marker\|chart\|theme\|text ...` (OpenLayers 2D — 아래 섹션) |
 | "GeoJSON/폴리곤 지도에 표시" | `vworld map ol --geojson f.geojson -o m.html` / `--polygon "lon,lat;…"` |
+| "인구/통계 데이터를 지도에 **색칠**(단계구분도/choropleth)" | `vworld map choropleth --geojson f.geojson --value-field <수치필드> --color-scale ylorrd --classes 5 --legend --open` |
+| "경계 GeoJSON에 통계표(인구 등) 값 **조인**" | `vworld data join --geojson 경계.geojson --table 통계.json --on adm_cd --table-key adm_cd --table-value <값필드> --as <속성명> -o joined.geojson` |
+| "**kosis/sgis 인구를 vworld 2d지도에 표시**" | 4단계 파이프라인 — 아래 `## 인구·통계 choropleth 워크플로` 참조 |
 | "여러 주소 한꺼번에" | `vworld geocode --input addrs.txt --concurrency 4` |
 | "2D 데이터레이어 158종 탐색" | `vworld data layers` (전체 목록; `--search <키워드>` / `--cat <카테고리>` / `--geom <타입>` 필터) |
 | "특정 2D 레이어 속성 확인" | `vworld data describe <데이터ID>` (속성표·단일검색키·샘플URL) |
@@ -113,6 +116,7 @@ vworld 2D지도 API 2.0(OpenLayers 3.10.1 기반 `vw.ol3.*`) 코드샘플을 CLI
 | `map theme` | WMS 주제도(named layer) + 토글 | `vworld map theme --layers "도시지역:LT_C_UQ111,관리지역:LT_C_UQ112" -o m.html` |
 | `map text` | 대량 포인트(TEXTLayer 클러스터링) | `vworld map text --file points.txt --epsg EPSG:4326 --distance 40 -o m.html` |
 | `map controller` | 2D/3D 전환 지도(vw.MapController) | `vworld map controller --center 127,37.5 -o m.html` |
+| `map choropleth` | **값별 색칠 단계구분도**(순수 ol9, feature별 styleFunction) + 범례 | `vworld map choropleth --geojson joined.geojson --value-field population --color-scale ylorrd --classes 5 --legend --open` |
 
 ### 공통 옵션
 - `--center lon,lat`(기본 127.0,37.5) / `--address "<주소>"`(geocode, `map ol`에서 --center보다 우선) / `--zoom`(기본 11).
@@ -137,6 +141,44 @@ vworld 2D지도 API 2.0(OpenLayers 3.10.1 기반 `vw.ol3.*`) 코드샘플을 CLI
 - 기존 Leaflet WFS/GeoJSON 뷰어(`wfs --viewer`)와 ol3 `map ol --geojson`은 **공존**(둘 다 GeoJSON 표시 가능).
 - vworld 로고·"연속지적도…참고용" 안내문구는 모든 생성 HTML에서 CSS로 숨김 처리(`.vw-logo`/`.vw-notice`).
 - 계획·검증 상세: `plan/2026-06-18-09:30:53-2dmap-19samples.md`.
+
+## 인구·통계 choropleth 워크플로 (kosis/sgis → vworld 2D지도)
+
+"인구/통계 데이터를 vworld 지도에 색칠해줘" 류 요청은 **외부 코드(python/js) 작성 없이 CLI 4단계**로 끝낸다. 핵심 조인키는 **통계청 행정구역코드 `adm_cd`**(KOSIS C1 = SGIS adm_cd, 동일 채번이라 무가공 조인).
+
+```bash
+# 1) 경계 GeoJSON (행정동/시군구, WGS84, properties.adm_cd) — SGIS
+sgis boundary hadmarea --year 2022 --adm-cd 11 --low-search 1 --wgs84 -o sgg.geojson
+#    (year는 데이터 있는 연도로; 시군구=시도2자리+low_search, 행정동=시군구5자리+low_search)
+
+# 2) 통계값 (adm_cd 기준) — KOSIS 또는 SGIS
+kosis d <인구표ID> -c1 11 -f json -o pop.json          # KOSIS: C1=adm_cd
+#   또는 sgis data population --year 2022 --adm-cd 11 --low-search 1 -f json -o pop.json  # SGIS: tot_ppltn
+
+# 3) adm_cd로 통계값을 경계 properties에 조인
+vworld data join --geojson sgg.geojson --table pop.json \
+  --on adm_cd --table-key <통계측키필드> --table-value <값필드> --as population -o joined.geojson
+#   매칭/미매칭 카운트를 JSON으로 보고(unmatched>0이면 키·연도 점검)
+
+# 4) 색칠 지도 생성 + 자동 열기
+vworld map choropleth --geojson joined.geojson --value-field population \
+  --color-scale ylorrd --classes 5 --class-method quantile --legend --open -o pop_map.html
+```
+
+### map choropleth 옵션
+- `--value-field <prop>`(필수): 색칠 기준 properties 수치 키(문자열 숫자도 파싱).
+- `--color-scale ylorrd|blues|greens|reds|viridis`(기본 ylorrd) / `--classes N`(기본 5).
+- `--class-method quantile|equal`(기본 quantile) / `--breaks a,b,c,d`(수동 경계, 주면 method 무시).
+- `--no-data-color <hex>`(기본 #cccccc) / `--opacity 0-1`(기본 0.78) / `--legend`(토스 범례) / `--open`(브라우저 열기).
+- 색 구간·램프는 Rust에서 계산(결정적·테스트됨), JS는 룩업만 — 순수 ol9 + VWorld 타일이라 feature별 색이 100% 렌더(vw.ol3.Map의 setStyle 누락 이슈 회피).
+
+### data join 옵션
+- `--geojson`(경계) `--table`(통계 JSON 배열) `--on`(경계측 키, 기본 adm_cd) `--table-key`(통계측 키) `--table-value`(가져올 값) `--as`(주입 properties명) `-o`(출력).
+- `--name-tail`: **이름 조인 폴백**. `--on adm_nm`처럼 이름으로 조인할 때 경계측 값의 마지막 공백토큰만 비교(예: "서울특별시 종로구 사직동" ↔ 통계 "사직동"). 코드가 안 맞는 통계표용. **같은 시군구 범위에서만 안전**(동명 행정동 주의).
+- 미매칭 feature는 no-data(범례에서 회색) 처리. adm_cd 자릿수(시도2/시군구5/행정동8)가 양측 일치해야 함.
+
+> **코드 일치 우선**: KOSIS C1 ↔ SGIS adm_cd는 **통계청 계열이면 시군구·행정동 모두 무가공 일치**(검증). 단 KOSIS 지자체 주민등록 읍면동표는 코드가 다를 수 있어 `--with-code`로 확인 필수 — 상세는 **`kosis` 스킬 `references/16-geo-join.md` §16.7**.
+> 검증: 서울 25개 시군구 25/25, 종로구 17개 행정동 17/17 매칭 → choropleth + 범례 렌더 확인.
 
 ## 데이터 자원 (references/data)
 
