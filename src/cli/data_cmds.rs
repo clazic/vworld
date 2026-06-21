@@ -358,7 +358,7 @@ pub struct DataDescribeArgs {
     pub data_id: String,
 }
 
-/// `data` 서브커맨드 enum (layers / describe / fetch).
+/// `data` 서브커맨드 enum (layers / describe / fetch / join).
 #[derive(clap::Subcommand, Debug)]
 pub enum DataSub {
     /// 전체 158개 2D 레이어 목록(오프라인, 키 불요).
@@ -368,6 +368,133 @@ pub enum DataSub {
     /// 2D데이터 GetFeature 조회 (/req/data). `data <id>` 위치인자와 동일.
     #[command(name = "fetch")]
     Fetch(DataArgs),
+    /// 통계 JSON을 GeoJSON에 adm_cd로 병합 (`vworld data join`).
+    #[command(name = "join")]
+    Join(DataJoinArgs),
+}
+
+/// `data join` 인자 — 경계 GeoJSON + 통계 JSON 배열을 조인키로 병합.
+#[derive(clap::Args, Debug)]
+pub struct DataJoinArgs {
+    /// 경계 GeoJSON 파일(EPSG:4326 FeatureCollection).
+    #[arg(long)]
+    pub geojson: std::path::PathBuf,
+    /// 통계 JSON 배열 파일.
+    #[arg(long)]
+    pub table: std::path::PathBuf,
+    /// GeoJSON properties 측 조인 키(기본 adm_cd).
+    #[arg(long, default_value = "adm_cd")]
+    pub on: String,
+    /// 통계 JSON 측 조인 키 필드.
+    #[arg(long)]
+    pub table_key: String,
+    /// 통계 JSON 측 값 필드.
+    #[arg(long)]
+    pub table_value: String,
+    /// 주입할 properties 이름(기본 = --table-value와 동일).
+    #[arg(long)]
+    pub r#as: Option<String>,
+    /// 이름 조인 폴백: GeoJSON 측 `--on` 값의 마지막 공백토큰만 비교한다.
+    /// 예) 경계 "서울특별시 종로구 사직동" ↔ 통계 "사직동". 코드가 안 맞는 통계표를
+    /// 행정동 이름으로 조인할 때 사용. 동명 행정동이 없는 같은 시군구 범위에서만 안전.
+    #[arg(long)]
+    pub name_tail: bool,
+    /// 출력 GeoJSON 파일.
+    #[arg(long, short)]
+    pub output: Option<std::path::PathBuf>,
+}
+
+/// `data join` 실행 — 통계 JSON을 GeoJSON properties에 병합.
+pub fn run_data_join(g: &GlobalArgs, a: DataJoinArgs) -> Result<()> {
+    use std::collections::HashMap;
+
+    let geojson_raw = std::fs::read_to_string(&a.geojson)
+        .map_err(|e| anyhow::anyhow!("GeoJSON 파일 읽기 실패: {e}"))?;
+    let table_raw = std::fs::read_to_string(&a.table)
+        .map_err(|e| anyhow::anyhow!("통계 JSON 파일 읽기 실패: {e}"))?;
+
+    let mut geojson: serde_json::Value = serde_json::from_str(&geojson_raw)
+        .map_err(|e| anyhow::anyhow!("GeoJSON 파싱 실패: {e}"))?;
+    let table: serde_json::Value = serde_json::from_str(&table_raw)
+        .map_err(|e| anyhow::anyhow!("통계 JSON 파싱 실패: {e}"))?;
+
+    let rows = table.as_array()
+        .ok_or_else(|| anyhow::anyhow!("통계 JSON은 배열이어야 합니다"))?;
+
+    // table_key → table_value 맵 구성
+    let mut lookup: HashMap<String, serde_json::Value> = HashMap::new();
+    for row in rows {
+        if let Some(k) = row[&a.table_key].as_str() {
+            lookup.insert(k.to_string(), row[&a.table_value].clone());
+        } else if let Some(n) = row[&a.table_key].as_i64() {
+            lookup.insert(n.to_string(), row[&a.table_value].clone());
+        }
+    }
+
+    let prop_name = a.r#as.as_deref().unwrap_or(&a.table_value);
+    let features = geojson["features"]
+        .as_array_mut()
+        .ok_or_else(|| anyhow::anyhow!("GeoJSON features 필드가 없습니다"))?;
+
+    let total = features.len();
+    let mut matched = 0usize;
+
+    for f in features.iter_mut() {
+        let key_val = {
+            let props = &f["properties"];
+            let v = &props[&a.on];
+            match v {
+                serde_json::Value::String(s) => {
+                    if a.name_tail {
+                        // 마지막 공백토큰만 비교(풀네임 → 행정동명).
+                        s.split_whitespace().last().map(|t| t.to_string())
+                    } else {
+                        Some(s.clone())
+                    }
+                }
+                serde_json::Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            }
+        };
+        if let Some(k) = key_val {
+            if let Some(val) = lookup.get(&k) {
+                if let Some(props) = f["properties"].as_object_mut() {
+                    props.insert(prop_name.to_string(), val.clone());
+                    matched += 1;
+                }
+            }
+        }
+    }
+
+    let result_str = serde_json::to_string(&geojson)?;
+
+    if let Some(out_path) = &a.output {
+        std::fs::write(out_path, &result_str)
+            .map_err(|e| anyhow::anyhow!("출력 파일 저장 실패: {e}"))?;
+        return output::print_json(
+            g,
+            &serde_json::json!({
+                "ok": true,
+                "total_features": total,
+                "matched": matched,
+                "unmatched": total - matched,
+                "prop_name": prop_name,
+                "saved": out_path,
+            }),
+        );
+    }
+
+    output::print_json(
+        g,
+        &serde_json::json!({
+            "ok": true,
+            "total_features": total,
+            "matched": matched,
+            "unmatched": total - matched,
+            "prop_name": prop_name,
+            "geojson": geojson,
+        }),
+    )
 }
 
 /// `data` 최상위 커맨드 — 서브커맨드(`layers`/`describe`/`fetch`)와
