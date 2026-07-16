@@ -91,10 +91,22 @@ pub struct MapArgs {
     #[arg(long)]
     pub route: Option<String>,
 
-    // --- choropleth ---
-    /// 색칠 기준 properties 수치 키 (choropleth 전용).
+    // --- choropleth / 3d-extrude ---
+    /// 색칠 기준 properties 수치 키 (choropleth/3d-extrude 전용).
     #[arg(long)]
     pub value_field: Option<String>,
+    /// 높이로 쓸 properties 수치 키 (3d-extrude 전용, 필수).
+    #[arg(long)]
+    pub elevation_field: Option<String>,
+    /// 높이 스케일: "auto"(기본, 데이터 정규화) 또는 수치(h = v * scale) (3d-extrude 전용).
+    #[arg(long, default_value = "auto")]
+    pub elevation_scale: String,
+    /// auto 스케일 시 최대 높이(맵 단위, 기본 4000.0) (3d-extrude 전용).
+    #[arg(long, default_value_t = 4000.0f64)]
+    pub max_height: f64,
+    /// 카메라 틸트 각도(기본 50.0) (3d-extrude 전용).
+    #[arg(long, default_value_t = 50.0f64)]
+    pub pitch: f64,
     /// 색상 램프(choropleth): ylorrd(기본)|blues|greens|reds|viridis.
     #[arg(long, default_value = "ylorrd")]
     pub color_scale: String,
@@ -213,6 +225,7 @@ pub async fn run_map(g: &GlobalArgs, a: MapArgs) -> Result<()> {
         "controller" => return run_controller(g, &a, key, &domain),
         "vector" => return run_vector(g, &a, key, &domain).await,
         "choropleth" => return run_choropleth(g, &a, key, &domain).await,
+        "3d-extrude" => return run_extrude(g, &a, key, &domain).await,
         _ => {}
     }
 
@@ -1241,6 +1254,156 @@ fn render_html(kind: &str, script_url: &str, center: &str, zoom: u32, init: &str
 </html>
 "#
     )
+}
+
+/// 3d-extrude 지도 — deck.gl GeoJsonLayer(extruded:true) + VWorld WMTS 타일.
+async fn run_extrude(g: &GlobalArgs, a: &MapArgs, key: &str, _domain: &str) -> Result<()> {
+    use super::choropleth;
+
+    let geojson_path = a.geojson.as_ref().ok_or_else(|| anyhow!("--geojson <PATH>가 필요합니다"))?;
+    let elevation_field = a.elevation_field.as_deref().ok_or_else(|| anyhow!("--elevation-field <PROP>가 필요합니다"))?;
+    let value_field = a.value_field.as_deref().unwrap_or(elevation_field);
+
+    let geojson_raw = std::fs::read_to_string(geojson_path)
+        .map_err(|e| anyhow!("GeoJSON 파일 읽기 실패: {e}"))?;
+
+    let geojson_val: serde_json::Value = serde_json::from_str(&geojson_raw)
+        .map_err(|e| anyhow!("GeoJSON 파싱 실패: {e}"))?;
+
+    // value_field 수치 수집
+    let mut values: Vec<f64> = Vec::new();
+    // elevation_field 수치 수집 (value_field와 다를 때)
+    let mut elev_values: Vec<f64> = Vec::new();
+
+    if let Some(features) = geojson_val["features"].as_array() {
+        for f in features {
+            let parse_prop = |key: &str| -> Option<f64> {
+                let v = &f["properties"][key];
+                match v {
+                    serde_json::Value::Number(n) => n.as_f64(),
+                    serde_json::Value::String(s) => s.trim().parse::<f64>().ok(),
+                    _ => None,
+                }
+            };
+            if let Some(n) = parse_prop(value_field) { values.push(n); }
+            if elevation_field != value_field {
+                if let Some(n) = parse_prop(elevation_field) { elev_values.push(n); }
+            }
+        }
+    }
+
+    let elev_vals = if elevation_field == value_field { &values } else { &elev_values };
+    let (emin, emax) = if elev_vals.is_empty() {
+        (0.0, 0.0)
+    } else {
+        (
+            elev_vals.iter().cloned().fold(f64::INFINITY, f64::min),
+            elev_vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+        )
+    };
+
+    // elevation scale: "auto" → None, 수치 → Some(f64)
+    let elev_scale: Option<f64> = if a.elevation_scale.trim().eq_ignore_ascii_case("auto") {
+        None
+    } else {
+        a.elevation_scale.trim().parse::<f64>().ok()
+    };
+
+    let elev_fn_js = choropleth::gen_elevation_fn_js(emin, emax, elev_scale, a.max_height);
+
+    // 색 계산
+    let n = a.classes as usize;
+    let breaks: Vec<f64> = if let Some(breaks_str) = &a.breaks {
+        breaks_str.split(',').filter_map(|s| s.trim().parse::<f64>().ok()).collect()
+    } else {
+        choropleth::compute_breaks(&values, n, &a.class_method)
+    };
+    let colors = choropleth::pick_colors(&a.color_scale, breaks.len() + 1);
+    let color_fn_js = choropleth::gen_color_fn_js(&breaks, &colors, &a.no_data_color);
+
+    // 범례
+    let legend_html = if a.legend {
+        let title = a.legend_title.as_deref().unwrap_or(value_field);
+        let (vmin, vmax) = if values.is_empty() {
+            (0.0, 0.0)
+        } else {
+            (
+                values.iter().cloned().fold(f64::INFINITY, f64::min),
+                values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            )
+        };
+        choropleth::gen_legend_html(&breaks, &colors, title, &a.no_data_color, vmin, vmax, &a.legend_pos)
+    } else {
+        String::new()
+    };
+
+    // 중심 좌표
+    let (lon, lat, zoom_str) = if let Some(c) = &a.center {
+        let parts: Vec<&str> = c.split(',').map(str::trim).collect();
+        match parts.as_slice() {
+            [lo, la] => (lo.to_string(), la.to_string(), a.zoom.to_string()),
+            _ => return Err(anyhow!("중심 좌표 형식 오류: '{c}'")),
+        }
+    } else if let Some((minx, miny, maxx, maxy)) = choropleth::compute_geojson_extent(&geojson_raw) {
+        let cx = (minx + maxx) / 2.0;
+        let cy = (miny + maxy) / 2.0;
+        (cx.to_string(), cy.to_string(), a.zoom.to_string())
+    } else {
+        ("126.978".to_string(), "37.5665".to_string(), a.zoom.to_string())
+    };
+
+    // GeoJSON 안전 주입
+    let geojson_safe = geojson_raw.replace("</", "<\\/");
+    let opacity = a.opacity;
+    let opacity_int = (a.opacity * 255.0).round() as u32;
+
+    // 템플릿 치환
+    let tmpl = include_str!("tool3d_samples/extrude_deck.html");
+    let html = tmpl
+        .replace("__DATA__", &geojson_safe)
+        .replace("__COLOR_FN__", &color_fn_js)
+        .replace("__ELEV_FN__", &elev_fn_js)
+        .replace("__EFIELD__", elevation_field)
+        .replace("__VFIELD__", value_field)
+        .replace("__LON__", &lon)
+        .replace("__LAT__", &lat)
+        .replace("__ZOOM__", &zoom_str)
+        .replace("__PITCH__", &a.pitch.to_string())
+        .replace("__OPACITY__", &opacity.to_string())
+        .replace("__OPACITY_INT__", &opacity_int.to_string())
+        .replace("__KEY__", key)
+        .replace("__LEGEND__", &legend_html);
+
+    // --open 처리
+    let open_after = a.open && a.output.is_some();
+
+    let feature_count = geojson_val["features"].as_array().map(|a| a.len()).unwrap_or(0);
+    let meta = serde_json::json!({
+        "kind": "3d-extrude",
+        "elevation_field": elevation_field,
+        "value_field": value_field,
+        "elevation_scale": a.elevation_scale,
+        "max_height": a.max_height,
+        "feature_count": feature_count,
+        "data_count": values.len(),
+        "colors": colors,
+        "center": [lon.parse::<f64>().unwrap_or(0.0), lat.parse::<f64>().unwrap_or(0.0)],
+    });
+    output_html(g, a, html, meta)?;
+
+    if open_after {
+        if let Some(path) = &a.output {
+            let path_str = path.to_string_lossy();
+            #[cfg(target_os = "macos")]
+            let _ = std::process::Command::new("open").arg(path_str.as_ref()).spawn();
+            #[cfg(target_os = "windows")]
+            let _ = std::process::Command::new("cmd").args(["/c", "start", path_str.as_ref()]).spawn();
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            let _ = std::process::Command::new("xdg-open").arg(path_str.as_ref()).spawn();
+        }
+    }
+
+    Ok(())
 }
 
 /// choropleth 지도 — VECTOR_HTML 기반, GeoJSON 오버레이 + 색 구간 스타일.

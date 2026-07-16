@@ -117,6 +117,26 @@ pub fn gen_legend_html(breaks: &[f64], colors: &[&str], title: &str, no_data_col
     html
 }
 
+pub fn gen_elevation_fn_js(vmin: f64, vmax: f64, scale: Option<f64>, max_height: f64) -> String {
+    match scale {
+        Some(s) => format!(
+            "function vwElev(v){{ if(v==null||isNaN(v)) return 0; return v * {s}; }}"
+        ),
+        None => {
+            let range = vmax - vmin;
+            if range == 0.0 {
+                format!(
+                    "function vwElev(v){{ if(v==null||isNaN(v)) return 0; return 0; }}"
+                )
+            } else {
+                format!(
+                    "function vwElev(v){{ if(v==null||isNaN(v)) return 0; return (v - {vmin}) / ({range}) * {max_height}; }}"
+                )
+            }
+        }
+    }
+}
+
 pub fn compute_geojson_extent(geojson_str: &str) -> Option<(f64, f64, f64, f64)> {
     let v: serde_json::Value = serde_json::from_str(geojson_str).ok()?;
     let features = v["features"].as_array()?;
@@ -182,6 +202,36 @@ mod tests {
     fn test_pick_colors_single() {
         let c = pick_colors("blues", 1);
         assert_eq!(c.len(), 1);
+    }
+
+    #[test]
+    fn test_elevation_fn_auto_normalize() {
+        let js = gen_elevation_fn_js(100.0, 1100.0, None, 3000.0);
+        assert!(js.contains("vwElev"));
+        assert!(js.contains("3000"));
+        assert!(js.contains("1000")); // range = 1100 - 100
+        assert!(js.contains("100")); // vmin
+    }
+
+    #[test]
+    fn test_elevation_fn_scale() {
+        let js = gen_elevation_fn_js(0.0, 1000.0, Some(2.5), 5000.0);
+        assert!(js.contains("v * 2.5"));
+        assert!(!js.contains("vmin") && !js.contains("1000")); // no normalize logic
+    }
+
+    #[test]
+    fn test_elevation_fn_null_guard() {
+        let js = gen_elevation_fn_js(0.0, 100.0, None, 1000.0);
+        assert!(js.contains("isNaN(v)"));
+        assert!(js.contains("return 0"));
+    }
+
+    #[test]
+    fn test_elevation_fn_zero_range() {
+        let js = gen_elevation_fn_js(500.0, 500.0, None, 3000.0);
+        // vmax==vmin → 0 방어
+        assert!(js.contains("return 0"));
     }
 
     #[test]
