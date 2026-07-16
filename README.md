@@ -196,6 +196,26 @@ vworld ned getCtnlgsSpceWFS --address "남산공원길 105" --radius 500 --shp p
 | `config` | 키 관리 (add-key / list-keys / remove-key / test-keys / path) |
 | `hjd-db build` | 행정동 경계 DB 생성 (--by-hjd 고속화용, 선택) |
 
+### WMS/WFS 지원 좌표계
+
+`wms`/`wfs` 명령의 `--crs`에 지정할 수 있는 좌표계 ([공식 가이드](https://www.vworld.kr/dev/v4dv_wmsguide2_s001.do) 기준):
+
+| 좌표계 | EPSG 코드 |
+|--------|-----------|
+| WGS84 경위도 | **EPSG:4326** (WMS 기본값) |
+| GRS80 경위도 | EPSG:4019 |
+| Google Mercator | EPSG:3857, **EPSG:900913** (WFS 기본값) |
+| 서부원점(GRS80) | EPSG:5180(50만), EPSG:5185 |
+| 중부원점(GRS80) | EPSG:5181(50만), EPSG:5186 |
+| 제주원점(GRS80, 55만) | EPSG:5182 |
+| 동부원점(GRS80) | EPSG:5183(50만), EPSG:5187 |
+| 동해(울릉)원점(GRS80) | EPSG:5184(50만), EPSG:5188 |
+| UTM-K(GRS80) | EPSG:5179 |
+
+> **bbox 축순서 주의**: WMS는 `EPSG:4326·5185·5186·5187·5188`일 때 `(ymin,xmin,ymax,xmax)` = 위도 먼저. WFS는 `EPSG:4326`일 때만 반전.
+
+**CLI 기본 좌표계** (`--crs` 미지정 시): `geocode`·`search`·`data`·`wms`·`wfs`·`staticmap`은 **EPSG:4326**, `ned`는 **EPSG:5187**(동부원점 TM — 중부는 5186, 서부는 5185로 변경), `map` 계열 입력 좌표는 EPSG:4326(lon,lat).
+
 ### 3D 분석 시뮬레이션 (15종)
 
 `vworld map 3dsim --analysis list` 로 전체 목록 확인.

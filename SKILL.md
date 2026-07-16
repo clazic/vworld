@@ -21,26 +21,34 @@ app/vworld [전역옵션] <명령> [인자]
 전역옵션: `--pretty`(들여쓰기) `--raw`(원응답) `--concurrency N` `--timing` `--referer <URL>` `--config <path>`.
 출력은 **JSON 기본**(stdout). 이미지형은 파일 저장 + 경로 JSON 보고.
 
+명령 전수(16종): geocode(`geo`) · geocoder · search(`s`) · data · ned · wms · wfs · catalog · staticmap(`static`) · legend · tile · map · batch · hjd-db · config · update.
+**전 명령·전 옵션 상세와 실측 검증된 예시는 `references/docs/USAGE.md`** (2026-07-16, 76케이스 실사용 테스트 통과본).
+
 ## 자연어 의도 → 명령 매핑
 
 | 사용자 의도 | 명령 |
 |-------------|------|
-| "이 주소 좌표 알려줘" | `vworld geocode "<주소>" --type ROAD` (지번이면 `--type PARCEL`) |
-| "이 좌표 주소 뭐야" | `vworld geocode "<x,y>" --reverse --type BOTH` |
+| "이 주소 좌표 알려줘" | `vworld geocode "<주소>"` (`--type auto` 기본 — 도로명→지번 자동 폴백) |
+| "이 좌표 주소 뭐야" | `vworld geocode "<x,y>"` (좌표 입력 시 자동 역지오. 수동이면 `--reverse --type BOTH`) |
 | "장소/건물 검색" | `vworld search "<키워드>" --type PLACE` |
-| "행정구역/도로명 검색" | `vworld search "<키워드>" --type DISTRICT` (또는 ROAD) |
-| "이 영역 지적도/공간데이터" | `vworld data <데이터셋ID> --geom-filter "BOX(...)"` (예: `LP_PA_CBND_BUBUN`) |
-| "건축물연령/공시지가/용도지역 등 국가중점데이터" | `vworld ned <오퍼레이션> --pnu <필지번호>` (목록: `vworld ned --list`) |
+| "행정구역 검색" | `vworld search "<키워드>" --type DISTRICT --category L2` (**category 필수** — L1 시도/L2 시군구/L3 읍면동/L4 리) |
+| "지번 주소 검색" | `vworld search "<주소>" --type ADDRESS --category PARCEL` (**category 필수** — ROAD\|PARCEL) |
+| "도로명 검색" | `vworld search "<키워드>" --type ROAD` |
+| "이 영역 지적도/공간데이터" | `vworld data <데이터셋ID> --geom-filter "BOX(minx,miny,maxx,maxy)"` (**EPSG 접미사 금지 + 면적 10km² 이내** — 넘으면 INVALID_RANGE. 예: `LP_PA_CBND_BUBUN`) |
+| "이 주소 필지의 용도지역/공시지가/건물속성" | **표준 3단계 체인**: `geocode`(좌표) → `data LP_PA_CBND_BUBUN --geom-filter "POINT(x y)"`(properties.pnu) → `ned <op> --pnu <PNU>` |
+| "건축물연령/공시지가/용도지역 등 국가중점데이터" | `vworld ned <오퍼레이션> --pnu <필지번호>` (목록: `vworld ned --list`, 변수: `--params`) |
 | "OO동 **전체 필지**의 공시지가/속성" | `vworld ned <WFS오퍼레이션> --pnu <법정동8자리> --all` (1000 cap 자동 우회) |
 | "OO동을 **행정동별로** 공시지가 비교" | `vworld ned getIndvdLandPriceWFS --pnu <법정동8자리> --by-hjd` (역지오 행정동 분류+통계, 자동 재처리) |
 | "여러 PNU 한꺼번에" | `vworld ned <data오퍼레이션> --input pnus.txt --concurrency 6` |
+| "여러 주소 한꺼번에" | `vworld geocode --input addrs.txt --concurrency 4` (또는 `vworld batch geocode --from addrs.txt`) |
 | "WMS 레이어 능력/맵" | `vworld wms --request GetCapabilities` / `--request GetMap --layers ... --bbox ...` |
-| "WFS 지리객체" | `vworld wfs --request GetFeature --typename ... --bbox ...` |
-| "다운로드 카탈로그" | `vworld catalog datasets --gid-cd 01` |
+| "WFS 지리객체" | `vworld wfs --request GetFeature --typename ... --bbox ...` (`-o v.html`이면 토스 디자인 HTML 뷰어) |
+| "다운로드 카탈로그" | `vworld catalog datasets --gid-cd 01` (gid-datasets는 일부 gid-cd에서 서버 제어문자로 파싱 실패 → `--raw` 우회) |
 | "지도 이미지 저장" | `vworld staticmap "<x,y>" --zoom 14 --size 512,512 -o map.png` |
-| "범례 이미지" | `vworld legend <레이어> -o legend.png` |
-| "범례 SLD 스타일" | `vworld legend <레이어> --sld -o legend.sld.xml` (GetLegendStyle, `--sld`는 부울 플래그·출력 경로는 `-o`) |
-| "배경지도 타일" | `vworld tile wmts --layer Base --z 14 --row <Y> --col <X> -o tile.png` |
+| "VWorld 레이어 범례 이미지" | `vworld legend <레이어> --style <레이어명> --type ALL -o legend.png` (**`--style` 필수** — 없으면 547B "결과없음". style은 보통 layer와 동일. 예: `lt_c_uq111`) |
+| "범례 SLD 스타일" | `vworld legend <레이어> --style <레이어명> --sld -o legend.sld.xml` (GetLegendStyle, `--sld`는 부울 플래그·출력 경로는 `-o`) |
+| "배경지도 타일" | `vworld tile wmts --layer Base --z 14 --row <Y> --col <X> -o tile.png` (서울 z14 실측: row 6449, col 13969) |
+| "벡터 타일(MVT)" | `vworld tile vector --layer traffic --z 14 --row <X> --col <Y> -o t.pbf` (**축이 wmts와 반대**. MVT는 poi(z≥15)·traffic만, Base는 `--ext png` 래스터 전용) |
 | "WMTS 주제도 목록(해외위성 등 시계열)" | `vworld tile wmts-themes --category cities --year 2025 --city Oslo --z 11 --row 1086 --col 596 -o oslo.png` |
 | "WMTS 능력문서(메타데이터)" | `vworld tile wmts-capabilities -o WMTSCapabilities.xml` |
 | "지도 띄우는 HTML" | `vworld map 2d --center 127,37.5 -o map.html` (3d/3dsim 가능) |
@@ -49,11 +57,11 @@ app/vworld [전역옵션] <명령> [인자]
 | "인구/통계 데이터를 지도에 **색칠**(단계구분도/choropleth)" | `vworld map choropleth --geojson f.geojson --value-field <수치필드> --color-scale ylorrd --classes 5 --legend --open` |
 | "경계 GeoJSON에 통계표(인구 등) 값 **조인**" | `vworld data join --geojson 경계.geojson --table 통계.json --on adm_cd --table-key adm_cd --table-value <값필드> --as <속성명> -o joined.geojson` |
 | "**kosis/sgis 인구를 vworld 2d지도에 표시**" | 4단계 파이프라인 — 아래 `## 인구·통계 choropleth 워크플로` 참조 |
-| "여러 주소 한꺼번에" | `vworld geocode --input addrs.txt --concurrency 4` |
 | "2D 데이터레이어 158종 탐색" | `vworld data layers` (전체 목록; `--search <키워드>` / `--cat <카테고리>` / `--geom <타입>` 필터) |
 | "특정 2D 레이어 속성 확인" | `vworld data describe <데이터ID>` (속성표·단일검색키·샘플URL) |
 | "연속지적도 DXF 내보내기" | `vworld ned getCtnlgsSpceWFS --address "<주소>" --radius 1000 --dxf parcels.dxf` (기본 EPSG:5187, `--dxf <경로>` 는 경로 인자) |
 | "연속지적도 SHP 내보내기" | `vworld ned getCtnlgsSpceWFS --address "<주소>" --radius 1000 --shp parcels.shp` (속성포함 5종 생성, `--shp <경로>` 는 경로 인자) |
+| "CLI 업데이트" | `vworld update` (`--check` 확인만 / `--yes` 비대화형 / `--version vX.Y.Z` 고정) |
 
 ## 키 관리
 
@@ -70,28 +78,64 @@ vworld config path
 
 ## 레퍼런스 문서 (references/docs/)
 
+- `references/docs/USAGE.md` — **전 명령·전 옵션 사용설명서**(76케이스 실사용 테스트 검증, 함정 표 포함). 명령 사용법이 불확실하면 이 문서 우선.
 - `references/docs/rest_api_catalog.md` — 13종 REST 엔드포인트·파라미터·옵션 전수.
 - `references/docs/national_data_catalog.md` — 국가중점데이터(NED) 115 오퍼레이션 전수.
-- `references/docs/USAGE.md` — 명령별 상세 사용법·입출력 예시·함정.
 
-## 함정 (요약 — 상세는 LEARNINGS.md)
+## 함정 (요약 — 상세는 LEARNINGS.md·USAGE.md 함정 표)
 
-- **주소 유형**: 도로명=ROAD, 지번=PARCEL. 틀리면 결과 없음(빈 result).
-- **bbox 축순서**: `EPSG:4326`은 `(ymin,xmin,ymax,xmax)`로 위경도 반전.
+- **주소 유형**: 도로명=ROAD, 지번=PARCEL. 틀리면 결과 없음(빈 result). 모르면 `--type auto`(기본).
+- **search ADDRESS/DISTRICT는 `--category` 필수**: ADDRESS=ROAD|PARCEL, DISTRICT=L1~L4. 없으면 PARAM_REQUIRED 에러.
+- **data geomFilter에 EPSG 접미사 금지**: `BOX(...,EPSG:4326)` → INVALID_RANGE. 좌표 4개만(4326 해석).
+- **data geomFilter BOX/POLYGON 면적 10km² 이내**(서버 제한): 넘으면 INVALID_RANGE("요청면적이 10km² 이내"). 넓은 영역은 분할 조회 또는 `ned <WFS> --pnu --all` 사용.
+- **data --emd-cd 단독 거부**: 일부 데이터셋(연속지적도 등)에서 INVALID_RANGE — geom/attr 필터 사용. 동 전수는 `ned <WFS> --pnu <8자리> --all`.
+- **bbox 축순서**(공식 가이드): WMS는 `EPSG:4326·5185·5186·5187·5188`일 때 `(ymin,xmin,ymax,xmax)` 위경도 반전. WFS는 `EPSG:4326`일 때만 반전, 그 외 `(xmin,ymin,xmax,ymax)`.
+- **WFS 기본 좌표계는 EPSG:900913**(Google Mercator) — srsname 미지정 시 좌표가 1.4e7대로 나오면 이것. lon/lat 원하면 `--crs EPSG:4326`(NED WFS는 `--param srsName=EPSG:4326`).
 - **NED WMS 계열**은 이미지(타일/staticmap 경로). 데이터형은 WFS/속성(data) 계열.
-- **타일 좌표**: WMTS `--row`=Y, `--col`=X. TMS는 CLI가 Y축 반전 자동 처리.
+- **타일 좌표**: wmts/tms `--row`=Y, `--col`=X — **vector는 반대**(`--row`=X, `--col`=Y). TMS는 CLI가 Y축 반전 자동 처리.
+- **벡터 MVT 레이어**: poi(z≥15)·traffic만. `--layer Base`는 `--ext png/jpeg` 래스터 전용.
+- **catalog gid-datasets**: gid-cd 02/03은 서버 응답 제어문자로 JSON 파싱 실패 — `--raw` 우회.
 - **HTTP 200 본문 에러**: CLI가 자동 검사. "결과 없음"은 정상(빈 결과)로 처리됨.
+
+## WMS/WFS 지원 좌표계 (공식 가이드 v4dv_wmsguide2)
+
+| 좌표계 | EPSG 코드 |
+|--------|-----------|
+| WGS84 경위도 | **EPSG:4326** (WMS crs 기본값) |
+| GRS80 경위도 | EPSG:4019 |
+| Google Mercator | EPSG:3857, **EPSG:900913** (WFS srsname 기본값) |
+| 서부원점(GRS80) | EPSG:5180(50만), EPSG:5185 |
+| 중부원점(GRS80) | EPSG:5181(50만), EPSG:5186 |
+| 제주원점(GRS80, 55만) | EPSG:5182 |
+| 동부원점(GRS80) | EPSG:5183(50만), EPSG:5187 |
+| 동해(울릉)원점(GRS80) | EPSG:5184(50만), EPSG:5188 |
+| UTM-K(GRS80) | EPSG:5179 |
+
+- bbox 축순서: WMS는 4326·5185~5188에서 `(ymin,xmin,ymax,xmax)` 반전, WFS는 4326에서만 반전.
+- 출처: https://www.vworld.kr/dev/v4dv_wmsguide2_s001.do (WMS/WFS 공통정보 · 지원좌표계)
+
+### CLI 명령별 기본 좌표계 (`--crs` 미지정 시)
+
+| 명령 | 기본값 | 비고 |
+|------|--------|------|
+| `geocode` `geocoder` `search` `data` `wms` `wfs` `staticmap` | **EPSG:4326** | CLI가 명시 전송(서버 WFS 기본 900913을 덮어씀) |
+| `ned` | **EPSG:5187**(동부원점 TM, 미터) | WMS/WFS 단건·DXF/SHP 내보내기. 중부 5186 / 서부 5185 / 위경도 4326은 `--crs`로 변경 |
+| `ned --by-hjd` | EPSG:4326 내부 고정 | `--crs` 무시(경고 출력) |
+| `map` 계열 입력(`--center`/`--polygon`/`--route`, text `--epsg`) | EPSG:4326 (lon,lat) | JS측 `ol.proj`가 내부 변환 |
+| NED WFS 원응답(`--raw`·`--param` 직접 호출 시) | EPSG:900913 | srsName 미지정 시 서버 기본 — `--param srsName=EPSG:4326`으로 변경 |
 
 ## 통합 지오코더 (geocoder) · 자동 지오코딩 (geocode)
 
 - `vworld geocoder "<주소 또는 x,y>"` → **좌표·지번·도로명을 한 번에**(apis.vworld.kr). 입력 형식 자동 감지(주소↔좌표).
 - `vworld geocode "<주소>"` — `--type auto`가 기본(도로명→지번 자동 폴백). 좌표("x,y") 입력 시 자동 역지오코딩(`--reverse` 불필요). `--type ROAD|PARCEL` 수동 지정도 가능.
 
-## 3D 분석·시뮬레이션 (map 3dsim --analysis) — 15종
+## 3D 분석·시뮬레이션 (map 3dsim --analysis) — 49종
 
 `vworld map 3dsim --analysis <type> --address "<주소>"`(또는 `--center lon,lat`) `-o out.html`
-- 목록: `vworld map 3dsim --analysis list`
-- 종류: slope 경사도 · terrainvolume 토공량 · profile 지형단면 · sunlight 일조량 · sunlightrights 일조권 · sunlightslope 일조사선제한 · visiblearea 가시면적 · viewsurface 시곡면 · culheritalter 문화재현상변경 · route 드론·차량주행 · buildingcontrol 건물편집 · heatmap · cluster · grid · hexbin
+- 목록: `vworld map 3dsim --analysis list` (**49종 실측** — API 1.0 분석 11 + 2.0 가시화 4 + 3.0 샘플 34)
+- **1.0 분석(11)**: slope 경사도 · terrainvolume 토공량 · profile 지형단면 · sunlight 일조량 · sunlightrights 일조권 · sunlightslope 일조사선제한 · visiblearea 가시면적 · viewsurface 시곡면 · culheritalter 문화재현상변경 · route 드론·차량주행 · buildingcontrol 건물편집
+- **2.0 가시화(4)**: heatmap · cluster · grid · hexbin
+- **3.0 샘플(34)**: flight 비행 · driving 운전 · measure 측정 · draw 그리기 · buildinginfo 건물클릭 · geojson/wfs/wmts 레이어 · popup · markergroup 등 (전체는 `--analysis list`)
 - 파라미터(위치·옵션·지도 인터랙션) 명세: `references/docs/3dsim_analysis_params.md`
 - 위치는 `--address`(지번/도로명 자동) 또는 `--center lon,lat` 주입. 공식 샘플에 토스 디자인 + 큰 지도가 적용됨.
 
@@ -107,6 +151,7 @@ CLI는 **분석 HTML 생성만** 한다 — 3D 분석은 브라우저(Cesium/Web
 vworld 2D지도 API 2.0(OpenLayers 3.10.1 기반 `vw.ol3.*`) 코드샘플을 CLI로 반영한 **OpenLayers 2D 데이터레이어** 명령군. 기존 `map 2d`(WebGL 3D엔진의 평면 모드)와 **별개**다 — 신규 키 `map ol`은 벡터·마커·차트·주제도 등 데이터 시각화 데모용.
 
 > **2d vs ol 구분**: `map 2d` = 3D엔진(Cesium/WebGL) 평면 모드 / `map ol` = OpenLayers 데이터레이어. 데이터(GeoJSON/마커/차트/주제도)를 얹으려면 **`map ol` 계열**을 쓴다.
+> `map --help`의 KIND 목록에는 7종만 보이지만 실제로는 **11종 전부 동작**(text/controller/choropleth/3d-extrude 포함, 실측).
 
 | 명령 | 용도 | 예시 |
 |------|------|------|
@@ -117,6 +162,15 @@ vworld 2D지도 API 2.0(OpenLayers 3.10.1 기반 `vw.ol3.*`) 코드샘플을 CLI
 | `map text` | 대량 포인트(TEXTLayer 클러스터링) | `vworld map text --file points.txt --epsg EPSG:4326 --distance 40 -o m.html` |
 | `map controller` | 2D/3D 전환 지도(vw.MapController) | `vworld map controller --center 127,37.5 -o m.html` |
 | `map choropleth` | **값별 색칠 단계구분도**(순수 ol9, feature별 styleFunction) + 범례 | `vworld map choropleth --geojson joined.geojson --value-field population --color-scale ylorrd --classes 5 --legend --open` |
+| `map 3d-extrude` | **GeoJSON 폴리곤을 수치값만큼 3D 높이로 세우는 deck.gl 지도** — extruded:true + VWorld WMTS 타일 | `vworld map 3d-extrude --geojson joined.geojson --elevation-field 인구 --value-field 인구 --color-scale ylorrd --classes 5 --legend --legend-title "인구 3D" --max-height 3000 -o out.html --open` |
+
+### map 3d-extrude 옵션
+- `--elevation-field <PROP>` (필수): 높이로 쓸 properties 수치 키.
+- `--elevation-scale <S>` (기본 "auto"): "auto"면 데이터 전체 범위를 `--max-height`로 정규화, 수치면 `h = v * scale`.
+- `--max-height <M>` (기본 4000.0): auto 스케일 시 최대 높이(맵 단위, 미터 기준).
+- `--pitch <P>` (기본 50.0): 카메라 틸트 각도.
+- `--value-field`: 색칠 기준 필드 (미지정 시 `--elevation-field` 재사용).
+- `--color-scale`, `--classes`, `--class-method`, `--breaks`, `--no-data-color`, `--opacity`, `--legend`, `--legend-title`, `--legend-pos`, `--center`, `--zoom`, `--open`, `-o`: choropleth와 동일.
 
 ### 공통 옵션
 - `--center lon,lat`(기본 127.0,37.5) / `--address "<주소>"`(geocode, `map ol`에서 --center보다 우선) / `--zoom`(기본 11).
@@ -223,6 +277,8 @@ vworld ned getIndvdLandPriceWFS --pnu <법정동8자리> --by-hjd --hjd-db refer
 
 - `--hjd-db <path>`는 **경로 인자** — 자동 참조 안 됨, 반드시 명시.
 - sqlite 미사용 시: `--by-hjd`가 역지오코딩 폴백으로 동작(느리지만 정상).
+- 실측(2026-07-16): 신정동 31140104 → 11,831필지 전수, DB point-in-polygon 분류 커버리지 100%, 행정동별 `{count, hjd, stats:{mean,median,q1,q3,min,max}}` 반환.
+- 부가 서브커맨드: `hjd-db info --db`(적재 수) / `hjd-db lookup --db <동명|ADM_CD>`(경계+지역코드 조인 조회) / `hjd-db region --xlsx --db`(센서스 지역코드 적재).
 
 ## 2D 데이터레이어 탐색 워크플로
 
@@ -238,9 +294,9 @@ vworld data layers --geom polygon           # 지오메트리 타입 필터
 # 2단계: 속성 확인 — 레이어 ID의 속성표·샘플URL 조회
 vworld data describe LP_PA_CBND_BUBUN
 
-# 3단계: 실제 조회 — GetFeature 호출
-vworld data LP_PA_CBND_BUBUN --geom-filter "BOX(126.9,37.4,127.1,37.6)"
-vworld data LP_PA_CBND_BUBUN --attr-filter "ADDR_CD='1168010100'"
+# 3단계: 실제 조회 — GetFeature 호출 (BOX 면적 10km² 이내!)
+vworld data LP_PA_CBND_BUBUN --geom-filter "BOX(126.97,37.55,127.0,37.58)"
+vworld data LP_PA_CBND_BUBUN --attr-filter "pnu:=:1114010300100310000"
 ```
 
 > **팁**: `data layers` 출력의 데이터ID를 `data describe <id>`에 그대로 넣으면 단일검색키·속성표·샘플 URL을 한 번에 확인할 수 있다.
