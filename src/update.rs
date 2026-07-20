@@ -202,8 +202,19 @@ pub fn verify_sha256(bytes: &[u8], expected: &str) -> Result<()> {
 /// Windows는 실행 중인 exe를 지울 수 없으므로 `.old`로 선이동한 뒤 교체한다.
 pub fn replace_binary(new_bytes: &[u8], dst: &Path) -> Result<()> {
     let tmp = dst.with_extension("new");
-    std::fs::write(&tmp, new_bytes)
-        .with_context(|| format!("임시 파일 쓰기 실패: {}", tmp.display()))?;
+    // 읽기 전용 설치 디렉터리(/usr/local/bin 등)에서는 rename 이전에 여기서 먼저 막힌다.
+    // 원인이 권한이면 해결 방법을 함께 알려준다.
+    std::fs::write(&tmp, new_bytes).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            anyhow!(
+                "설치 디렉터리에 쓸 권한이 없습니다: {} ({e}). \
+                sudo로 다시 실행하거나 설치 스크립트를 재실행하세요.",
+                dst.parent().unwrap_or(dst).display()
+            )
+        } else {
+            anyhow!("임시 파일 쓰기 실패: {} ({e})", tmp.display())
+        }
+    })?;
 
     #[cfg(unix)]
     {
@@ -494,6 +505,28 @@ mod tests {
         assert!(!dst.with_extension("new").exists());
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_replace_binary_permission_denied() {
+        // 읽기 전용 디렉터리에서는 rename 이전에 임시파일 쓰기부터 막힌다.
+        // 이때 원인 모를 "Permission denied"가 아니라 해결 방법이 담긴 메시지가 나와야 한다.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("vworld-perm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dst = dir.join("vworld");
+        std::fs::write(&dst, b"old").unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let err = replace_binary(b"new", &dst).unwrap_err().to_string();
+
+        // 정리 먼저(단언 실패로 조기 종료돼도 임시 디렉터리가 남지 않도록).
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).ok();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert!(err.contains("권한"), "권한 안내가 없는 메시지: {err}");
+        assert!(err.contains("sudo"), "해결 방법이 없는 메시지: {err}");
     }
 
     #[test]

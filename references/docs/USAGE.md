@@ -664,3 +664,11 @@ vworld v0.2.1 → v0.3.0 업데이트 완료
 | HTTP 200 본문 에러 | CLI가 자동 검사 — "결과 없음"은 정상(빈 결과) |
 | `--hjd-db`는 자동 참조 안 됨 | 경로를 반드시 명시 |
 | VWorld WFS maxFeatures 1000 cap, startIndex 미지원 | `ned --all`이 PNU 접두 분할로 자동 우회 |
+| `update`가 파이프·CI에서 아무것도 안 바꾸고 끝남 | 정상 동작 — stdin이 터미널이 아니면 프롬프트가 자동 "아니오". 비대화형에서 교체하려면 `--yes` |
+| `update --version v0.2.1` 이하 롤백 시 "체크섬 파일이 없습니다" 경고 | 정상 — 그 릴리스에는 `SHA256SUMS`가 없다. 검증만 생략하고 진행. 체크섬이 **불일치**하면 경고가 아니라 즉시 중단된다 |
+| `update`가 "설치 디렉터리에 쓸 권한이 없습니다"로 중단(종료코드 1) | `/usr/local/bin` 등 쓰기 권한 없는 위치에 설치된 경우. `sudo`로 재실행하거나 설치 스크립트 재실행. 기존 바이너리는 그대로 남는다 |
+| `update` 후에도 다른 경로의 vworld가 옛 버전 | `update`는 **실행한 그 바이너리**와 설치된 스킬 사본(`<skill>/app/vworld`)만 교체한다. `which -a vworld`로 중복 설치 확인 |
+| `update`가 스킬 파일을 안 건드림 | 스킬 디렉터리(`~/.claude|.codex/skills/vworld`, `$PWD/.claude|.codex/…`)가 **존재할 때만** 갱신한다(새로 만들지 않음). 설치되지 않았으면 정상 |
+| `LEARNINGS.md`가 update로 갱신되지 않음 | 의도된 동작 — 설치 시 1회만 배포되고 이후엔 사용자·에이전트가 append하는 파일이라 덮어쓰지 않는다 |
+| zsh에서 `for c in "data layers"; do vworld $c --help; done`이 "unrecognized subcommand" | **zsh는 unquoted 변수를 단어 분리하지 않는다**(bash와 다름). `vworld ${=c} --help` 또는 배열 사용 |
+| 옵션 의미가 헷갈림 | `vworld <명령> --help`에 값 형식·허용값·기본값·함정·예시가 들어 있다(`-h`는 한 줄 요약) |
