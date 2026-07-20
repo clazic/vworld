@@ -75,6 +75,8 @@ fn prompt_yn(msg: &str, assume_yes: bool) -> bool {
 }
 
 pub async fn run_update(args: UpdateArgs) -> Result<()> {
+    // 이 명령 자체가 버전을 다루므로 종료 직전 자동 알림은 끈다.
+    update::suppress_notify();
     let current = env!("CARGO_PKG_VERSION");
     eprintln!("현재 버전: v{current}");
 

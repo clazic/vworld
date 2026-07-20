@@ -28,6 +28,15 @@ pub const SKILL_ASSET: &str = "vworld-skill-files.zip";
 /// 스킬 디렉터리 이름.
 const SKILL_NAME: &str = "vworld";
 
+/// `update` 명령 실행 시 종료 직전 버전 알림을 끄기 위한 플래그.
+static NOTIFY_SUPPRESSED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// 이번 프로세스에서는 종료 직전 버전 알림을 출력하지 않는다.
+pub fn suppress_notify() {
+    NOTIFY_SUPPRESSED.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
 // ─────────────────────────── OS 타깃 매핑 ────────────────────────────────────
 
 /// 현재 플랫폼에 맞는 릴리스 자산명.
@@ -338,6 +347,11 @@ fn now_epoch() -> u64 {
 pub async fn maybe_notify() {
     // CI 환경 또는 사용자가 명시적으로 끈 경우 생략.
     if std::env::var_os("CI").is_some() || std::env::var_os("VWORLD_NO_UPDATE_CHECK").is_some() {
+        return;
+    }
+    // `vworld update` 직후에는 알리지 않는다 — 실행 중인 프로세스는 교체 전 버전이라
+    // 방금 설치한 새 버전을 "새 버전이 있습니다"로 다시 안내하게 된다.
+    if NOTIFY_SUPPRESSED.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
 
