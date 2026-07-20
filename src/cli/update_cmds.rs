@@ -138,7 +138,7 @@ pub async fn run_update(args: UpdateArgs) -> Result<()> {
             &format!("바이너리를 업데이트하겠습니까? (v{current} → {tag}) (y/N) "),
             args.yes,
         ) {
-            verify(&sums, asset, &bytes, "SHA256 체크섬 검증 중...")?;
+            verify(&sums, asset, &bytes, "SHA256 체크섬 검증 중...", "체크섬 검증 완료.")?;
 
             let exe = std::env::current_exe().context("현재 실행 파일 경로 확인 실패")?;
             // 심링크로 설치된 경우 실제 파일을 교체해야 한다.
@@ -174,7 +174,13 @@ pub async fn run_update(args: UpdateArgs) -> Result<()> {
             eprintln!("  스킬 파일 다운로드 중...");
             match update::download_asset(&tag, update::SKILL_ASSET).await? {
                 Some(bytes) => {
-                    verify(&sums, update::SKILL_ASSET, &bytes, "스킬 체크섬 검증 중...")?;
+                    verify(
+                        &sums,
+                        update::SKILL_ASSET,
+                        &bytes,
+                        "스킬 체크섬 검증 중...",
+                        "스킬 체크섬 검증 완료.",
+                    )?;
                     for dir in &skill_dirs {
                         update::extract_zip(&bytes, dir)
                             .with_context(|| format!("스킬 갱신 실패: {}", dir.display()))?;
@@ -204,13 +210,14 @@ fn verify(
     sums: &std::collections::HashMap<String, String>,
     asset: &str,
     bytes: &[u8],
-    label: &str,
+    doing: &str,
+    done: &str,
 ) -> Result<()> {
     match sums.get(asset) {
         Some(expected) => {
-            eprintln!("  {label}");
+            eprintln!("  {doing}");
             update::verify_sha256(bytes, expected)?;
-            eprintln!("  체크섬 검증 완료.");
+            eprintln!("  {done}");
         }
         None => eprintln!("  경고: {asset} 의 체크섬 항목이 없어 검증을 생략합니다."),
     }
