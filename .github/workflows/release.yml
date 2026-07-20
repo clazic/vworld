@@ -112,7 +112,9 @@ jobs:
         run: |
           set -e
           mkdir -p bundle/app bundle/references/data
-          cp SKILL.md INSTALL.md bundle/ 2>/dev/null || true
+          # LEARNINGS.md 는 설치 시 1회만 심는다(스킬이 "작업 전 읽어라"라고 지시하는 파일).
+          # 업데이트용 vworld-skill-files.zip 에는 넣지 않는다 — 사용자가 append 한 오답노트를 덮어쓰지 않기 위해.
+          cp SKILL.md INSTALL.md README.md LEARNINGS.md bundle/ 2>/dev/null || true
           cp app/config.toml.example bundle/app/
           cp artifacts/macos/vworld-macos       bundle/app/
           cp artifacts/macos/vworld             bundle/app/

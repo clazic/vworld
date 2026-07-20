@@ -95,7 +95,7 @@ vworld update --force          # 같은 버전 재설치(설치본 복구)
 - 스킬 안에 `app/vworld` 사본이 있으면 **함께 교체**되어 버전이 어긋나지 않는다.
 - 체크섬 불일치는 즉시 중단. 체크섬 자산이 없는 구 릴리스(v0.2.1 이하)는 경고 후 진행.
 - 비대화형(파이프·CI)에서는 프롬프트가 자동 "아니오" — 의도치 않은 교체가 없다. 자동 알림 끄기: `VWORLD_NO_UPDATE_CHECK=1`.
-- 갱신되는 파일: `SKILL.md` · `INSTALL.md` · `README.md` · `references/`. `LEARNINGS.md`와 `scripts/`는 덮어쓰지 않는다(자기학습 기록 보존).
+- 갱신되는 파일: `SKILL.md` · `INSTALL.md` · `README.md` · `references/`. **`LEARNINGS.md`와 `scripts/`는 덮어쓰지 않는다** — `LEARNINGS.md`는 설치 시 1회만 배포되고 이후로는 이 스킬이 append하는 자기학습 기록이므로 업데이트가 건드리지 않는다.
 
 ## 레퍼런스 문서 (references/docs/)
 
