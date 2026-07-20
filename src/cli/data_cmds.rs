@@ -80,6 +80,8 @@ pub struct GeocodeArgs {
     /// 주소 유형: auto | ROAD | PARCEL. auto는 도로명→지번 자동 판별·폴백.
     /// 기본값 auto 권장 — 유형을 수동 지정(ROAD/PARCEL)했는데 실제 주소 유형과 안 맞으면
     /// 빈 결과가 나온다(실측 함정). 예: `--type ROAD`.
+    /// 역지오코딩에 한해 서버가 지원하는 `BOTH`(지번+도로명 동시 반환)도 그대로 전달된다.
+    /// 예: `--reverse --type BOTH`.
     #[arg(long, default_value = "auto")]
     pub r#type: String,
     /// 응답 좌표계. 기본 EPSG:4326(위경도). 예: `--crs EPSG:5187`(동부원점 TM, 미터).
