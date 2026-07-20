@@ -63,14 +63,19 @@ cargo build --release
 
 ## 업데이트
 
-설치한 vworld는 `vworld update`로 GitHub Releases의 최신 버전을 받아 **자가 교체**합니다.
+설치한 vworld는 `vworld update`로 GitHub Releases의 최신 버전을 받아 **자가 교체**하고, 이어서 설치된 **스킬 파일(SKILL.md·references 등)도 함께 갱신**합니다. 다운로드한 자산은 릴리스의 `SHA256SUMS`로 검증합니다.
 
 ```bash
-vworld update                  # 최신 버전으로 다운로드·교체
+vworld update                  # 바이너리 교체 + 스킬 파일 갱신 (각각 y/N 확인)
 vworld update --check          # 새 버전 존재 여부만 확인 (교체 안 함)
-vworld update --version v0.2.0 # 특정 버전으로 교체
+vworld update --version v0.2.0 # 특정 버전으로 교체 (롤백)
 vworld update --yes            # 확인 프롬프트 생략 (CI·비대화형)
+vworld update --force          # 같은 버전이어도 다시 받아 교체
+vworld update --skill-only     # 스킬 파일만 갱신
+vworld update --no-skill       # 바이너리만 교체
 ```
+
+스킬 갱신 대상은 `~/.claude/skills/vworld`, `~/.codex/skills/vworld`, 현재 폴더의 `.claude`/`.codex` 스킬 경로 중 **이미 설치되어 있는 것**뿐입니다. 없으면 건너뜁니다. 비대화형 환경(파이프·CI)에서는 프롬프트가 자동으로 "아니오"가 되어 의도치 않은 교체가 일어나지 않습니다.
 
 평소 명령 실행 시 **하루 1회** 최신 버전을 자동 감지해, 새 버전이 있으면 알림만 출력합니다(다운로드는 하지 않음). 알림은 `stderr`로 나가 명령 출력(JSON 등)을 오염시키지 않습니다. 자동 감지를 끄려면:
 

@@ -45,7 +45,7 @@ fn main() -> ExitCode {
     };
 
     // 평소 실행 시 하루 1회 버전 감지 — best-effort, 종료코드와 독립.
-    update::maybe_notify();
+    runtime.block_on(update::maybe_notify());
 
     exit
 }

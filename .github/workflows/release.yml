@@ -124,6 +124,33 @@ jobs:
           (cd bundle && zip -r ../vworld-skill.zip .)
           ls -la vworld-skill.zip
 
+      # `vworld update` 전용 경량 스킬 번들 — 바이너리 미포함(자산 수십 MB → 수 MB).
+      # 설치용 vworld-skill.zip(바이너리 포함)은 install.sh/ps1 호환을 위해 그대로 유지한다.
+      - name: skill 파일 번들 구성 (바이너리 제외)
+        run: |
+          set -e
+          mkdir -p files/references/data
+          cp SKILL.md INSTALL.md README.md files/ 2>/dev/null || true
+          cp -R references/docs files/references/docs
+          cp references/data/*.tsv files/references/data/
+          (cd files && zip -r ../vworld-skill-files.zip .)
+          ls -la vworld-skill-files.zip
+
+      # 자산 무결성 검증용 — `vworld update` 가 이 파일로 다운로드를 검증한다.
+      # 경로를 벗겨 평탄한 파일명만 남긴다(자산명으로 조회하므로).
+      - name: SHA256SUMS 생성
+        run: |
+          set -e
+          sha256sum \
+            artifacts/macos/vworld-macos \
+            artifacts/macos/vworld \
+            artifacts/linux/vworld-linux \
+            artifacts/windows/vworld-windows.exe \
+            vworld-skill.zip \
+            vworld-skill-files.zip \
+            | sed 's| [^ ]*/| |' > SHA256SUMS
+          cat SHA256SUMS
+
       - name: GitHub Release 게시
         uses: softprops/action-gh-release@v2
         with:
@@ -136,3 +163,5 @@ jobs:
             artifacts/linux/vworld-linux
             artifacts/windows/vworld-windows.exe
             vworld-skill.zip
+            vworld-skill-files.zip
+            SHA256SUMS

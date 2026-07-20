@@ -233,8 +233,10 @@ pub enum Commands {
 
     /// 자가 업데이트 (GitHub Releases)
     ///
-    /// GitHub Releases에서 최신(또는 지정) 버전을 받아 실행 중인 바이너리를 교체하는
-    /// 오프라인 명령(키 불요). `--check`로 확인만, `--yes`로 확인 프롬프트 생략 가능.
+    /// GitHub Releases에서 최신(또는 지정) 버전을 받아 실행 중인 바이너리를 교체하고,
+    /// 설치된 스킬 디렉터리의 문서·레퍼런스 파일도 함께 갱신한다(각각 y/N 확인).
+    /// 다운로드 자산은 릴리스의 SHA256SUMS로 검증한다. 인증키가 필요 없는 오프라인 명령.
+    /// `--check` 확인만, `--yes` 프롬프트 생략, `--skill-only`/`--no-skill`로 대상 한정.
     ///
     /// 예) `vworld update --check` / `vworld update --yes`
     Update(update_cmds::UpdateArgs),

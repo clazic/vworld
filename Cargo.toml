@@ -1,6 +1,6 @@
 [package]
 name = "vworld"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "VWorld OpenAPI CLI — 자기완결 단일 바이너리 (kosis 동시성 패턴 차용)"
 license = "MIT"
@@ -24,7 +24,8 @@ shapefile = "0.6"
 encoding_rs = "0.8"
 rusqlite = { version = "0.31", features = ["bundled"] }
 calamine = "0.26"
-self_update = { version = "0.44", default-features = false, features = ["rustls", "compression-flate2", "ureq"] }
+sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 mockito = "1"

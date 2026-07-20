@@ -601,14 +601,48 @@ vworld config path                                                # config.toml 
 ## update — 자가 업데이트 (GitHub Releases)
 
 ```
-vworld update                    # 최신 버전으로 다운로드·교체
+vworld update                    # 최신 버전으로 다운로드·교체 + 스킬 파일 갱신
 vworld update --check            # 새 버전 확인만(교체 안 함)
-vworld update --version v0.2.0   # 특정 버전 태그로 교체
+vworld update --version v0.2.0   # 특정 버전 태그로 교체(버전 비교 생략 — 롤백 가능)
 vworld update --yes              # 확인 프롬프트 생략(CI·비대화형)
+vworld update --force            # 같은 버전이어도 다시 받아 교체(설치본 복구)
+vworld update --skill-only       # 바이너리는 두고 스킬 파일만 갱신
+vworld update --no-skill         # 스킬은 건너뛰고 바이너리만 교체
 ```
 
+진행 순서 — 각 단계는 개별 확인 프롬프트를 거친다.
+
+```
+현재 버전: v0.2.1
+최신 버전 확인 중...
+최신 버전: v0.3.0
+  체크섬 파일 다운로드 중...
+  바이너리 다운로드 중 (vworld-macos)...
+바이너리를 업데이트하겠습니까? (v0.2.1 → v0.3.0) (y/N) y
+  SHA256 체크섬 검증 중...
+  체크섬 검증 완료.
+  바이너리 교체 중 (/Users/me/.local/bin/vworld)...
+  바이너리: /Users/me/.local/bin/vworld
+스킬 파일(SKILL.md, INSTALL.md, references 등)을 업데이트하겠습니까? (y/N) y
+  스킬 파일 다운로드 중...
+  스킬 체크섬 검증 중...
+  스킬 체크섬 검증 완료.
+  스킬: /Users/me/.claude/skills/vworld
+  스킬: /Users/me/.codex/skills/vworld
+vworld v0.2.1 → v0.3.0 업데이트 완료
+```
+
+| 항목 | 동작 |
+|------|------|
+| 체크섬 | 릴리스의 `SHA256SUMS`로 다운로드를 검증. 불일치면 즉시 중단. 체크섬 자산이 없는 구 릴리스(v0.2.1 이하)는 경고 후 진행 |
+| 스킬 갱신 대상 | `~/.claude/skills/vworld`, `~/.codex/skills/vworld`, `$PWD/.claude/skills/vworld`, `$PWD/.codex/skills/vworld` 중 **이미 존재하는 것만**. 없으면 건너뜀(새로 만들지 않음) |
+| 스킬 자산 | `vworld-skill-files.zip`(문서·레퍼런스만, 바이너리 제외 — 업데이트 트래픽 절감). 설치용 `vworld-skill.zip`은 바이너리 포함으로 그대로 유지 |
+| 스킬 내 바이너리 | 스킬 디렉터리에 `app/vworld` 사본이 있으면 함께 교체(stale 방지). 없으면 아무것도 하지 않음 |
+| 비대화형 | stdin이 터미널이 아니면 프롬프트는 자동 "아니오" — CI에서 의도치 않은 교체가 없다. `--yes`로 전부 승인 |
+| 실행 중 교체 | 임시파일을 **대상과 같은 디렉터리**에 만들고 rename(EXDEV 회피). Windows는 기존 exe를 `.old`로 선이동 |
+| 권한 부족 | `/usr/local/bin` 등은 rename이 거부될 수 있음 — sudo 또는 install.sh 재실행 안내 |
+
 - 평소 실행 시 하루 1회 자동 감지·알림(stderr, 다운로드 없음). 끄기: `export VWORLD_NO_UPDATE_CHECK=1` (CI는 자동 생략).
-- 스킬 모드 설치 시 update는 실행 중인 바이너리 1개만 교체 — 사본 전체 갱신은 설치 스크립트 재실행.
 
 ---
 

@@ -61,7 +61,7 @@ app/vworld [전역옵션] <명령> [인자]
 | "특정 2D 레이어 속성 확인" | `vworld data describe <데이터ID>` (속성표·단일검색키·샘플URL) |
 | "연속지적도 DXF 내보내기" | `vworld ned getCtnlgsSpceWFS --address "<주소>" --radius 1000 --dxf parcels.dxf` (기본 EPSG:5187, `--dxf <경로>` 는 경로 인자) |
 | "연속지적도 SHP 내보내기" | `vworld ned getCtnlgsSpceWFS --address "<주소>" --radius 1000 --shp parcels.shp` (속성포함 5종 생성, `--shp <경로>` 는 경로 인자) |
-| "CLI 업데이트" | `vworld update` (`--check` 확인만 / `--yes` 비대화형 / `--version vX.Y.Z` 고정) |
+| "CLI 업데이트" | `vworld update` — 바이너리 교체 + 스킬 파일 갱신 (`--check` 확인만 / `--yes` 비대화형 / `--version vX.Y.Z` 롤백 / `--skill-only` / `--no-skill`) |
 
 ## 키 관리
 
