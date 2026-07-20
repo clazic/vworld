@@ -55,20 +55,39 @@ async fn fetch_one(
 
 // ───────────────────────── geocode ─────────────────────────
 
+/// 주소 ↔ 좌표 변환(`/req/address`, 지오코딩/역지오코딩).
+///
+/// 주소를 입력하면 좌표로, 좌표("x,y")를 입력하면 주소로 변환한다. `--type auto`(기본)는
+/// 도로명(ROAD) 주소로 먼저 시도하고 실패하면 지번(PARCEL)으로 자동 폴백하므로 유형을 몰라도
+/// 대부분 성공한다. 입력이 "x,y"(숫자 두 개, 쉼표 구분) 형태면 `--reverse` 없이도 역지오코딩으로
+/// 자동 감지된다. 출력은 `response.result.point.{x,y}` + 정제주소(`refined`).
+///
+/// 예: `vworld geocode "세종대로 110"` (주소→좌표) /
+/// `vworld geocode "126.978,37.566"` (좌표→주소, 자동 역지오) /
+/// `vworld geocode --input addrs.txt --concurrency 4` (배치).
+///
+/// 함정: `--type`을 ROAD/PARCEL로 수동 지정했는데 실제 주소 유형과 안 맞으면 빈 결과가 나온다 —
+/// 모르면 `auto`를 쓴다.
 #[derive(Args, Debug)]
 pub struct GeocodeArgs {
     /// 주소(지오) 또는 좌표 "x,y"(역지오, --reverse 시).
+    /// 예: "세종대로 110" 또는 "126.978,37.566"(쉼표 구분 경도,위도). 좌표 형식은 자동 감지된다.
     pub query: Option<String>,
-    /// 역지오코딩(좌표→주소). query는 "x,y".
+    /// 역지오코딩(좌표→주소) 명시. query는 "x,y" 형식이어야 한다.
+    /// 좌표 형식 입력 시 자동 감지되므로 보통 생략 가능 — 애매한 입력을 강제로 역지오 처리할 때만 사용.
     #[arg(long)]
     pub reverse: bool,
     /// 주소 유형: auto | ROAD | PARCEL. auto는 도로명→지번 자동 판별·폴백.
+    /// 기본값 auto 권장 — 유형을 수동 지정(ROAD/PARCEL)했는데 실제 주소 유형과 안 맞으면
+    /// 빈 결과가 나온다(실측 함정). 예: `--type ROAD`.
     #[arg(long, default_value = "auto")]
     pub r#type: String,
-    /// 응답 좌표계.
+    /// 응답 좌표계. 기본 EPSG:4326(위경도). 예: `--crs EPSG:5187`(동부원점 TM, 미터).
     #[arg(long, default_value = "EPSG:4326")]
     pub crs: String,
-    /// 다건 입력 파일(줄당 1건) — 배치.
+    /// 다건 입력 파일(줄당 1건) — 배치 처리.
+    /// `#`로 시작하는 줄과 빈 줄은 자동 스킵. `--concurrency`로 동시 처리 수 조절.
+    /// 예: `--input addrs.txt --concurrency 4`.
     #[arg(long)]
     pub input: Option<std::path::PathBuf>,
 }
@@ -153,11 +172,20 @@ pub async fn run_geocode(g: &GlobalArgs, a: GeocodeArgs) -> Result<()> {
 
 const GEOCODER_HOST: &str = "https://apis.vworld.kr";
 
+/// apis.vworld.kr 통합 지오코더 — 주소/좌표를 받아 **좌표·지번·도로명을 한 번에** 반환.
+///
+/// `geocode`(/req/address)와 달리 별도 호스트(apis.vworld.kr)를 사용하며, 주소를 좌표로
+/// 바꾼 뒤 그 좌표로 지번·도로명 주소를 모두 역변환해 함께 반환한다. 지번(jibun2coord) →
+/// 도로명(new2coord) 순으로 좌표화를 시도한다.
+///
+/// 예: `vworld geocoder "경상남도 고성군 하이면 덕명리 420-1"` /
+/// `vworld geocoder "127.0,37.5"`(좌표 입력 자동 감지).
 #[derive(Args, Debug)]
 pub struct GeocoderArgs {
     /// 주소(지번/도로명) 또는 좌표 "x,y" — 입력 형식을 자동 감지해 변환.
+    /// 좌표 입력은 "경도,위도"(쉼표 구분) 형식. 예: "127.0,37.5".
     pub query: String,
-    /// 응답 좌표계.
+    /// 응답 좌표계. 기본 epsg:4326(위경도). 예: `--epsg epsg:5187`.
     #[arg(long, default_value = "epsg:4326")]
     pub epsg: String,
 }
@@ -297,22 +325,38 @@ pub async fn geocode_point(g: &GlobalArgs, address: &str, crs: &str) -> Result<(
 
 // ───────────────────────── search ─────────────────────────
 
+/// 장소·주소·행정구역·도로명 검색(`/req/search`).
+///
+/// `--type`으로 검색 대상을 고른다: PLACE(장소, 기본)/ADDRESS(주소)/DISTRICT(행정구역)/ROAD(도로명).
+/// **ADDRESS와 DISTRICT는 `--category`가 필수**다(없으면 PARAM_REQUIRED 에러, 실측) — 빠뜨리기 쉬운
+/// 함정이므로 미리 챙긴다.
+///
+/// 예: `vworld search "광화문" --type PLACE` /
+/// `vworld search "종로구" --type DISTRICT --category L2` /
+/// `vworld search "태평로1가 31" --type ADDRESS --category PARCEL`.
 #[derive(Args, Debug)]
 pub struct SearchArgs {
+    /// 검색어. 유형(--type)에 맞는 형식으로 입력(장소명/주소/행정구역명/도로명).
+    /// 예: "광화문", "판교로 344", "종로구".
     pub query: String,
-    /// 검색 대상.
+    /// 검색 대상: PLACE | ADDRESS | DISTRICT | ROAD. 기본 PLACE.
+    /// ADDRESS/DISTRICT는 `--category`가 필수(실측, 없으면 PARAM_REQUIRED 에러).
     #[arg(long, default_value = "PLACE")]
     pub r#type: String,
+    /// 카테고리. **ADDRESS는 `ROAD`|`PARCEL`, DISTRICT는 `L1`~`L4`(시도/시군구/읍면동/리) 필수**.
+    /// PLACE/ROAD는 선택사항. 예: `--type DISTRICT --category L2`(시군구).
     #[arg(long)]
     pub category: Option<String>,
-    /// 페이지 크기(1~1000).
+    /// 페이지 크기(1~1000). 기본은 서버 기본값(보통 10). 예: `--size 20`.
     #[arg(long)]
     pub size: Option<u32>,
+    /// 조회 페이지 번호(1부터). `--size`와 함께 사용. 예: `--page 2`.
     #[arg(long)]
     pub page: Option<u32>,
-    /// 검색 영역 bbox "minx,miny,maxx,maxy".
+    /// 검색 영역 bbox "minx,miny,maxx,maxy"(경도,위도 순). 지정한 영역으로 결과를 제한한다.
     #[arg(long)]
     pub bbox: Option<String>,
+    /// 좌표계. 기본 EPSG:4326(위경도). 예: `--crs EPSG:5187`.
     #[arg(long, default_value = "EPSG:4326")]
     pub crs: String,
 }
@@ -337,43 +381,75 @@ pub async fn run_search(g: &GlobalArgs, a: SearchArgs) -> Result<()> {
 
 // ───────────────────────── 2D data ─────────────────────────
 
-/// `data layers` 서브명령 인자.
+/// `data layers` — 전체 158종 2D데이터레이어 목록 조회(오프라인, 키 불요).
+///
+/// 로컬 레지스트리(twod_registry)에서 바로 필터링해 보여준다. 네트워크 호출이 없어 키 등록
+/// 없이도 즉시 사용 가능. `layers`(발견) → `describe`(속성 확인) → `data <ID>`(조회) 순서로
+/// 탐색하는 것이 표준 워크플로다.
+///
+/// 예: `vworld data layers --search "지적"` / `vworld data layers --cat "토지"` /
+/// `vworld data layers --geom polygon`.
 #[derive(Args, Debug)]
 pub struct DataLayersArgs {
     /// 키워드 부분일치 필터(data_id·name·cat, 대소문자 무시).
+    /// 예: `--search "지적"` → data_id/레이어명/카테고리 중 하나라도 포함하면 매치.
     #[arg(long)]
     pub search: Option<String>,
-    /// 카테고리 일치 필터.
+    /// 카테고리 일치 필터(대소문자 무시, 완전일치). 예: `--cat "토지"`.
     #[arg(long)]
     pub cat: Option<String>,
-    /// geometry 타입 필터(polygon|line|point, 대소문자 무시·Multi 접두 무시).
+    /// geometry 타입 필터: polygon|line|point. 대소문자 무시·"Multi" 접두 무시(예: MultiPolygon→polygon).
+    /// 알 수 없는 값이면 에러로 종료. 예: `--geom polygon`.
     #[arg(long)]
     pub geom: Option<String>,
 }
 
-/// `data describe <data_id>` 서브명령 인자.
+/// `data describe <data_id>` — 레이어 상세 정보 조회(오프라인, 키 불요).
+///
+/// 속성표(이름·타입·단일검색 가능 여부·설명)와 samples URL을 출력한다. `data <ID>` 실제 조회
+/// 전에 어떤 속성으로 필터링(`--attr-filter`)할 수 있는지 미리 확인하는 용도.
+///
+/// 예: `vworld data describe LP_PA_CBND_BUBUN`.
 #[derive(Args, Debug)]
 pub struct DataDescribeArgs {
-    /// 데이터ID (예: LT_C_UQ111). 소문자 입력 허용.
+    /// 데이터ID (예: LT_C_UQ111, LP_PA_CBND_BUBUN). 소문자 입력 허용(대소문자 무시 매칭).
     pub data_id: String,
 }
 
 /// `data` 서브커맨드 enum (layers / describe / fetch / join).
+///
+/// `data <데이터ID> [옵션]` 위치인자 조회(=`fetch`)와 서브커맨드가 공존한다(§`DataTopArgs`).
+/// 탐색 워크플로: `layers`(전체 158종 중 발견) → `describe`(속성·단일검색키 확인) →
+/// `fetch`(실제 GetFeature 조회) → 필요 시 `join`(통계 데이터 병합).
 #[derive(clap::Subcommand, Debug)]
 pub enum DataSub {
     /// 전체 158개 2D 레이어 목록(오프라인, 키 불요).
+    /// `--search`/`--cat`/`--geom`으로 필터링 가능. 예: `vworld data layers --geom polygon`.
     Layers(DataLayersArgs),
     /// 레이어 상세 정보 — 속성표·단일검색키·샘플URL(오프라인, 키 불요).
+    /// 예: `vworld data describe LP_PA_CBND_BUBUN`.
     Describe(DataDescribeArgs),
     /// 2D데이터 GetFeature 조회 (/req/data). `data <id>` 위치인자와 동일.
+    /// 예: `vworld data fetch LP_PA_CBND_BUBUN --geom-filter "POINT(126.978 37.566)"`.
     #[command(name = "fetch")]
     Fetch(DataArgs),
     /// 통계 JSON을 GeoJSON에 adm_cd로 병합 (`vworld data join`).
+    /// 예: kosis/sgis에서 받은 통계값을 경계 GeoJSON properties에 주입해 choropleth 지도 입력을 만든다.
     #[command(name = "join")]
     Join(DataJoinArgs),
 }
 
-/// `data join` 인자 — 경계 GeoJSON + 통계 JSON 배열을 조인키로 병합.
+/// `data join` — 통계 JSON 배열을 경계 GeoJSON의 properties에 조인키로 병합(오프라인).
+///
+/// choropleth/3d-extrude 지도의 입력 파일을 만드는 전처리 단계다. 경계 GeoJSON(예: SGIS
+/// `boundary`로 받은 시군구 경계)과 통계 JSON 배열(예: KOSIS 통계값)을 각각의 조인 키로
+/// 매칭해, 통계값을 GeoJSON feature의 properties에 새 필드로 추가한다.
+///
+/// 예: `vworld data join --geojson sgg.geojson --table pop.json --on adm_cd
+/// --table-key C1 --table-value DT --as population -o joined.geojson`.
+///
+/// 함정: adm_cd 자릿수(시도2/시군구5/행정동8)가 양측에서 일치해야 매칭된다. `unmatched` 카운트가
+/// 0보다 크면 키·연도 조합을 다시 확인할 것.
 #[derive(clap::Args, Debug)]
 pub struct DataJoinArgs {
     /// 경계 GeoJSON 파일(EPSG:4326 FeatureCollection).
@@ -706,26 +782,48 @@ pub fn run_data_describe(g: &GlobalArgs, a: DataDescribeArgs) -> Result<()> {
     Ok(())
 }
 
+/// `data <데이터ID>` / `data fetch` — 2D데이터레이어 GetFeature 조회(`/req/data`).
+///
+/// 158종 2D데이터 중 하나를 공간 필터 또는 속성 필터로 조회한다. geom/attr 필터가 둘 다 없으면
+/// `--emd-cd`(읍면동코드)가 필요하지만, 일부 데이터셋(예: LP_PA_CBND_BUBUN)은 emd_cd 단독으로는
+/// INVALID_RANGE로 거부되므로 geom/attr 필터 사용을 권장한다.
+///
+/// 예: `vworld data LP_PA_CBND_BUBUN --geom-filter "POINT(126.978 37.566)"`(좌표→필지) /
+/// `vworld data LP_PA_CBND_BUBUN --attr-filter "pnu:=:1114010300100310000"`.
+///
+/// 주소→필지 속성 표준 체인: `geocode`(좌표) → `data <ID> --geom-filter "POINT(x y)"`
+/// (properties.pnu 획득) → `ned <op> --pnu <PNU>`.
 #[derive(Args, Debug)]
 pub struct DataArgs {
     /// 데이터셋 ID(예: LP_PA_CBND_BUBUN).
     /// 서브커맨드(`layers`/`describe`) 사용 시에는 생략 가능.
     pub data: Option<String>,
-    /// 공간 필터(POINT(x y) / POLYGON((...)) / BOX(...)).
+    /// 공간 필터: `POINT(x y)` / `POLYGON((...))` / `BOX(minx,miny,maxx,maxy)`.
+    /// 좌표는 항상 EPSG:4326으로 해석 — **EPSG 접미사를 붙이면 INVALID_RANGE 에러**(실측).
+    /// BOX/POLYGON은 **요청 면적 10km² 이내**(서버 제한, 실측), 초과 시 분할 조회 필요.
+    /// 예: `--geom-filter "POINT(126.978 37.566)"`.
     #[arg(long)]
     pub geom_filter: Option<String>,
-    /// 속성 필터(속성:연산자:값|...).
+    /// 속성 필터: `속성:연산자:값|속성2:연산자:값2...`(파이프로 다중 조건 연결).
+    /// 예: `--attr-filter "pnu:=:1114010300100310000"`.
     #[arg(long)]
     pub attr_filter: Option<String>,
-    /// 읍면동코드(geom/attr 둘 다 없을 때 필수).
+    /// 읍면동코드(geom/attr 필터 둘 다 없을 때 필수).
+    /// **실측 주의**: 일부 데이터셋(예: LP_PA_CBND_BUBUN)은 단독 사용 시 INVALID_RANGE로 거부됨 —
+    /// geom/attr 필터 사용 권장. 동 전수 조회는 `ned <WFS> --pnu <8자리> --all` 참고.
     #[arg(long)]
     pub emd_cd: Option<String>,
+    /// 반환 컬럼 제한(콤마 구분 속성명). 지정 시 해당 컬럼만 properties에 포함.
+    /// 예: `--columns pnu,jibun`.
     #[arg(long)]
     pub columns: Option<String>,
+    /// 페이지 크기(반환 건수 상한). 미지정 시 서버 기본값. 예: `--size 100`.
     #[arg(long)]
     pub size: Option<u32>,
+    /// 조회 페이지 번호(1부터). `--size`와 함께 페이징. 예: `--page 2`.
     #[arg(long)]
     pub page: Option<u32>,
+    /// 좌표계. 기본 EPSG:4326(위경도). 예: `--crs EPSG:5187`.
     #[arg(long, default_value = "EPSG:4326")]
     pub crs: String,
 }
@@ -759,38 +857,57 @@ pub async fn run_data(g: &GlobalArgs, a: DataArgs) -> Result<()> {
 
 // ───────────────────────── 행정동 경계 DB ─────────────────────────
 
+/// 행정동 경계 SQLite 구축·조회(오프라인, 키 불요).
+///
+/// `ned --by-hjd`(행정동별 집계)를 가속하는 선택적 캐시 DB. 없어도 `--by-hjd`는 역지오 폴백으로
+/// 동작하지만, 1회 `build`로 적재해두면 129MB SHP 재파싱 없이 즉시·정확한 point-in-polygon
+/// 분류가 가능해진다. 두 테이블: `hjd`(경계 폴리곤·ADM_CD·ADM_NM), `region_code`(ADM_CD·명칭) —
+/// 조인 키는 ADM_CD(시도2+시군구3+읍면동3).
+///
+/// 예: `vworld hjd-db build --shp BND_ADM_DONG_PG.shp --db hjd.sqlite` →
+/// `vworld ned <op> --by-hjd --hjd-db hjd.sqlite`.
 #[derive(clap::Subcommand, Debug)]
 pub enum HjdDbCmd {
     /// 행정동 경계 SHP(BND_ADM_DONG_PG.shp)를 SQLite로 적재.
+    /// 폴리곤 blob + bbox 인덱스를 저장해 이후 영역 질의를 가속한다. 1회만 실행하면 재사용 가능.
+    /// 예: `vworld hjd-db build --shp BND_ADM_DONG_PG.shp --db hjd.sqlite`.
     Build {
-        /// 행정동 경계 SHP 경로.
+        /// 행정동 경계 SHP 경로(예: `BND_ADM_DONG_PG.shp`, EPSG:5186 좌표계 가정).
         #[arg(long)]
         shp: std::path::PathBuf,
-        /// 출력 SQLite DB 경로.
+        /// 출력 SQLite DB 경로. 기존 파일이 있으면 갱신/재생성된다.
         #[arg(long)]
         db: std::path::PathBuf,
     },
-    /// DB 요약(행정동 수) 출력.
+    /// DB 요약(적재된 행정동 수) 출력 — 적재 성공 여부 확인용.
+    /// 예: `vworld hjd-db info --db hjd.sqlite`.
     Info {
+        /// 조회할 SQLite DB 경로(`build`로 생성한 파일).
         #[arg(long)]
         db: std::path::PathBuf,
     },
     /// 센서스 지역코드 xlsx → `region_code` 테이블 적재(행정동 경계와 ADM_CD로 조인).
+    /// `hjd` 테이블과 별개 테이블이므로 `build`를 먼저 실행해야 한다.
+    /// 예: `vworld hjd-db region --xlsx 지역코드.xlsx --db hjd.sqlite --sheet "2025년 6월"`.
     Region {
-        /// 지역코드 xlsx 경로.
+        /// 지역코드 xlsx 경로(통계청 센서스 지역코드 파일).
         #[arg(long)]
         xlsx: std::path::PathBuf,
+        /// 적재 대상 SQLite DB 경로(`build`로 이미 생성된 파일이어야 함).
         #[arg(long)]
         db: std::path::PathBuf,
-        /// 시트명(기본: SHP 기준일에 맞는 최신).
+        /// 시트명(기본 "2025년 6월"). xlsx 안의 연도별 시트 중 SHP 기준일에 맞는 것을 선택.
+        /// 예: `--sheet "2024년 12월"`.
         #[arg(long, default_value = "2025년 6월")]
         sheet: String,
     },
-    /// ADM_CD 또는 동명으로 경계+지역코드 조인 조회.
+    /// ADM_CD 또는 동명으로 경계+지역코드 조인 조회 — 적재 결과 확인·검증용.
+    /// 예: `vworld hjd-db lookup --db hjd.sqlite 종로구`.
     Lookup {
+        /// 조회할 SQLite DB 경로.
         #[arg(long)]
         db: std::path::PathBuf,
-        /// 행정동코드(8자리) 또는 동명 일부.
+        /// 행정동코드(8자리, 예: 11110101) 또는 동명 일부(부분일치, 예: "사직동").
         query: String,
     },
 }
@@ -826,6 +943,17 @@ pub async fn run_hjd_db(g: &GlobalArgs, cmd: HjdDbCmd) -> Result<()> {
 
 // ───────────────────────── NED(국가중점) ─────────────────────────
 
+/// 국가중점데이터(NED) 115 오퍼레이션 조회(`/ned/{wms|wfs|data}`).
+///
+/// 오퍼레이션마다 WMS(이미지)/WFS(피처 GeoJSON)/data(속성) 세 계열 중 하나로 동작한다.
+/// `--list`로 전체 목록, `--params`로 특정 오퍼레이션의 요청변수를 확인할 수 있다. WFS 계열은
+/// 1000건 cap을 우회하는 `--all`(전수 수집), 필지를 행정동별로 집계하는 `--by-hjd`, 주소 반경
+/// 격자수집(`--address`) 등 고급 기능을 함께 제공한다.
+///
+/// 예: `vworld ned --list` / `vworld ned getBuildingAge --pnu 1111018300101970001` /
+/// `vworld ned getIndvdLandPriceWFS --pnu 31140104 --all`.
+///
+/// 함정: NED WMS 계열은 이미지만 반환 — 속성값이 필요하면 WFS/data 계열을 사용할 것.
 #[derive(Args, Debug)]
 pub struct NedArgs {
     /// 오퍼레이션 이름(예: getBuildingAge) 또는 `--list`로 목록.
@@ -2067,17 +2195,35 @@ async fn harvest_wfs_all(
 
 // ───────────────────────── WMS / WFS ─────────────────────────
 
+/// WMS 지도 이미지/능력문서 조회(`/req/wms`, OGC WMS 1.3.0).
+///
+/// `--request GetCapabilities`(기본)는 서비스가 제공하는 레이어 목록을 텍스트(XML)로 반환하고,
+/// `--request GetMap`은 지정 레이어의 래스터 이미지를 렌더링해 `-o` 경로에 저장한다. GetMap은
+/// `-o` 출력 경로가 필수다.
+///
+/// 예: `vworld wms --request GetCapabilities` /
+/// `vworld wms --request GetMap --layers lt_c_uq111 --bbox 37.5,126.9,37.6,127.1
+/// --width 512 --height 512 -o uq.png`.
+///
+/// 함정: `--crs`가 EPSG:4326/5185~5188이면 bbox 축 순서가 (ymin,xmin,ymax,xmax) = 위도,경도
+/// 순(WMS 1.3.0 표준)이다 — 흔한 (minx,miny,maxx,maxy)와 반대이므로 주의.
 #[derive(Args, Debug)]
 pub struct WmsArgs {
-    /// 오퍼레이션(GetMap/GetCapabilities).
+    /// 오퍼레이션. GetCapabilities(기본, 능력문서/레이어 목록) | GetMap(이미지 렌더링).
+    /// GetMap 사용 시 `-o` 출력 경로가 필수다.
     #[arg(long, default_value = "GetCapabilities")]
     pub request: String,
+    /// 조회할 레이어명(GetMap 필수). 예: `--layers lt_c_uq111`. 복수 레이어는 콤마 구분.
     #[arg(long)]
     pub layers: Option<String>,
+    /// 영역 bbox(GetMap 필수). `--crs`가 4326/5185~5188이면 (ymin,xmin,ymax,xmax) 순,
+    /// 그 외(예: EPSG:900913)는 (minx,miny,maxx,maxy) 순. 예: `--bbox 37.5,126.9,37.6,127.1`.
     #[arg(long)]
     pub bbox: Option<String>,
+    /// 이미지 너비(픽셀, GetMap). 기본은 서버 기본값. 예: `--width 512`.
     #[arg(long)]
     pub width: Option<u32>,
+    /// 이미지 높이(픽셀, GetMap). 기본은 서버 기본값. 예: `--height 512`.
     #[arg(long)]
     pub height: Option<u32>,
     /// 좌표계. 주의: EPSG:4326·5185~5188은 bbox가 (ymin,xmin,ymax,xmax)=위도,경도 순(WMS 1.3.0).
@@ -2134,18 +2280,39 @@ pub async fn run_wms(g: &GlobalArgs, a: WmsArgs) -> Result<()> {
     fetch_one(g, &client, url, params, pick_auth(&auths)).await
 }
 
+/// WFS 피처 조회(`/req/wfs`, OGC WFS 1.1.0) — GeoJSON 또는 HTML 뷰어로 출력.
+///
+/// 지정 레이어(`--typename`)의 피처를 bbox 또는 PNU로 필터링해 조회한다. `outputFormat`은
+/// application/json으로 자동 부착되며, `-o <file.html>`을 지정하면 결과를 그대로 반환하는 대신
+/// 토스 디자인 2D 지도에 피처를 오버레이한 HTML 뷰어로 저장한다.
+///
+/// 예: `vworld wfs --request GetFeature --typename lp_pa_cbnd_bubun
+/// --bbox 37.55,126.97,37.57,126.99 --max-features 100` /
+/// `vworld wfs --typename <레이어> --bbox <...> -o viewer.html`.
+///
+/// 함정: `--crs`(srsName)가 EPSG:4326이면 bbox 축 순서 반전에 주의. `--typename`은 소문자여야
+/// 매칭된다(대문자 입력 시 자동 소문자 변환).
 #[derive(Args, Debug)]
 pub struct WfsArgs {
+    /// 오퍼레이션. 기본 GetFeature(피처 조회). 대부분의 경우 변경 불필요.
     #[arg(long, default_value = "GetFeature")]
     pub request: String,
+    /// 피처타입(레이어명). 내부적으로 소문자로 변환되어 전송된다(대문자 입력해도 매칭됨).
+    /// 예: `--typename lp_pa_cbnd_bubun`.
     #[arg(long)]
     pub typename: Option<String>,
+    /// 영역 bbox. `--crs`가 EPSG:4326이면 축 반전에 주의(위도,경도 순일 수 있음).
+    /// 예: `--bbox 37.55,126.97,37.57,126.99`.
     #[arg(long)]
     pub bbox: Option<String>,
+    /// 필지고유번호(19자리) 필터 — 특정 필지 하나만 조회할 때 사용. 예: `--pnu 1114010300100310000`.
     #[arg(long)]
     pub pnu: Option<String>,
+    /// 최대 반환 피처 수. VWorld WFS는 서버측 1000건 cap이 있다(startIndex 미지원).
+    /// 전수 수집이 필요하면 `ned <WFS> --all`을 사용할 것. 예: `--max-features 100`.
     #[arg(long)]
     pub max_features: Option<u32>,
+    /// 좌표계(srsName). 기본 EPSG:4326(위경도) — 이 경우 bbox 축반전 주의.
     #[arg(long, default_value = "EPSG:4326")]
     pub crs: String,
     /// HTML 뷰어로 저장(미지정 시 GeoJSON/JSON 출력). 토스 디자인 지도에 피처를 그림.
@@ -2185,17 +2352,31 @@ pub async fn run_wfs(g: &GlobalArgs, a: WfsArgs) -> Result<()> {
 
 // ───────────────────────── catalog ─────────────────────────
 
+/// 다운로드 카탈로그 조회(`/ned/dtmk/*`) — 데이터셋 분류·목록.
+///
+/// NED 다운로드 카탈로그의 분류코드(gid)와 데이터셋 목록을 조회한다. `datasets`(기본)는
+/// 전체 데이터셋, `gids`는 분류코드 목록, `gid-datasets`는 특정 분류의 데이터셋 목록을 반환한다.
+///
+/// 예: `vworld catalog datasets --gid-cd 01 --num-rows 100` / `vworld catalog gids`.
+///
+/// 함정(실측): `gid-datasets`는 일부 분류(`--gid-cd 02`/`03`)에서 서버 응답에 이스케이프 안 된
+/// 제어문자가 포함돼 "JSON 파싱 실패" 에러가 난다 — `--raw`로 원응답을 받아 우회할 것.
 #[derive(Args, Debug)]
 pub struct CatalogArgs {
-    /// 오퍼레이션: datasets / gids / gid-datasets.
+    /// 오퍼레이션: datasets(기본, 전체 데이터셋) / gids(분류코드 목록) / gid-datasets(분류별 데이터셋).
     #[arg(default_value = "datasets")]
     pub op: String,
+    /// 분류 코드. `gid-datasets`에서 조회 대상 분류를 지정. 예: `--gid-cd 01`.
+    /// 일부 코드(02/03)는 서버 응답 파싱 실패 함정이 있음(`--raw`로 우회).
     #[arg(long)]
     pub gid_cd: Option<String>,
+    /// 데이터셋 ID로 단건 조회. 예: `--ds-id <ID>`.
     #[arg(long)]
     pub ds_id: Option<String>,
+    /// 조회 페이지 번호(1부터). `--num-rows`와 함께 페이징. 예: `--page 2`.
     #[arg(long)]
     pub page: Option<u32>,
+    /// 페이지당 행 수. 미지정 시 서버 기본값. 예: `--num-rows 100`.
     #[arg(long)]
     pub num_rows: Option<u32>,
 }
@@ -2230,15 +2411,25 @@ pub async fn run_catalog(g: &GlobalArgs, a: CatalogArgs) -> Result<()> {
 
 // ───────────────────────── batch ─────────────────────────
 
+/// 다건 배치 실행 — 현재 `geocode` 전용 진입점.
+///
+/// 입력 파일(줄당 1건)을 병렬 지오코딩한다. `geocode --input`과 기능은 동일하지만 별도
+/// 서브커맨드 형태로 제공되는 진입점이다.
+///
+/// 예: `vworld batch geocode --from addrs.txt --concurrency 4`.
+///
+/// 참고: `geocode --input` / `ned --input`으로도 배치가 가능 — batch는 geocode 전용이다.
 #[derive(Args, Debug)]
 pub struct BatchArgs {
-    /// 배치 대상 명령(현재 geocode 지원).
+    /// 배치 대상 명령(현재 geocode만 지원). 예: `geocode`.
     pub command: String,
-    /// 입력 파일(줄당 1건).
+    /// 입력 파일 경로(줄당 1건, `#` 주석/빈줄 스킵).
     #[arg(long)]
     pub from: std::path::PathBuf,
+    /// 주소 유형(geocode 배치용). 기본 ROAD(도로명). 예: `--type PARCEL`.
     #[arg(long, default_value = "ROAD")]
     pub r#type: String,
+    /// 역지오코딩 배치(좌표→주소). 입력 파일의 각 줄이 "x,y" 좌표여야 한다.
     #[arg(long)]
     pub reverse: bool,
 }

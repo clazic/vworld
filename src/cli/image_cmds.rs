@@ -28,23 +28,36 @@ async fn fetch_image(
 
 #[derive(Args, Debug)]
 pub struct StaticMapArgs {
-    /// 중심 좌표 "x,y".
+    /// 중심 좌표(필수 위치 인자).
+    /// 형식: "x,y" — crs가 EPSG:4326(기본)이면 x=경도, y=위도.
+    /// 예: "127.0,37.5"(서울시청 부근).
     pub center: String,
-    /// 줌 레벨(6~18).
+    /// 줌 레벨(필수).
+    /// 허용 범위 6~18 — 벗어나면 실행 전 에러로 즉시 거부.
+    /// 예: --zoom 14.
     #[arg(long)]
     pub zoom: u32,
-    /// 이미지 크기 "width,height"(최대 1024,1024).
+    /// 이미지 크기 "width,height".
+    /// 기본 "512,512", 최대 "1024,1024"(초과 시 서버에서 거부될 수 있음).
+    /// 예: --size 800,600.
     #[arg(long, default_value = "512,512")]
     pub size: String,
-    /// 지도 유형.
+    /// 지도 유형(배경지도).
+    /// 허용값: NONE / GRAPHIC(기본) / GRAPHIC_WHITE / SATELLITE / HYBRID.
+    /// 예: --basemap SATELLITE.
     #[arg(long, default_value = "GRAPHIC")]
     pub basemap: String,
     /// 이미지 포맷.
+    /// 기본 "png". 서버 지원 포맷(png/jpg 등)에 맞춰 지정.
     #[arg(long, default_value = "png")]
     pub format: String,
+    /// 좌표계(CRS).
+    /// 기본 "EPSG:4326"(경도,위도 순 입력). 다른 좌표계 사용 시 center 값도 해당 좌표계 단위로 맞출 것.
+    /// 예: --crs EPSG:4326.
     #[arg(long, default_value = "EPSG:4326")]
     pub crs: String,
     /// 저장 경로.
+    /// 기본 "staticmap.png". `-o`/`--output`으로 지정. `--raw`(전역 옵션) 지정 시 파일 저장 대신 stdout으로 바이트 출력.
     #[arg(long, short, default_value = "staticmap.png")]
     pub output: std::path::PathBuf,
 }
@@ -71,18 +84,30 @@ pub async fn run_staticmap(g: &GlobalArgs, a: StaticMapArgs) -> Result<()> {
 
 #[derive(Args, Debug)]
 pub struct LegendArgs {
-    /// 대상 레이어.
+    /// 대상 레이어(필수 위치 인자).
+    /// 예: lt_c_uq111. --style에 보통 동일한 이름을 지정한다.
     pub layer: String,
+    /// 스타일명 — 사실상 필수.
+    /// 미지정 시 응답이 547바이트 "결과없음"으로 조용히 실패한다(실측 함정).
+    /// 보통 layer와 동일한 값을 지정. 예: --style lt_c_uq111.
     #[arg(long)]
     pub style: Option<String>,
     /// 범례 타입.
+    /// 허용값: ALL(기본) / LAYER / SUB.
     #[arg(long, default_value = "ALL")]
     pub r#type: String,
+    /// 이미지 포맷.
+    /// 기본 "png". --sld 지정 시에는 사용되지 않음(SLD는 XML 텍스트 응답).
     #[arg(long, default_value = "png")]
     pub format: String,
     /// SLD 스타일 정의(XML) 조회 — request=GetLegendStyle. 미지정 시 범례 이미지(GetLegendGraphic).
+    /// 부울 플래그(값 없이 --sld). 저장 경로는 동일하게 -o/--output 사용.
+    /// 예: vworld legend lt_c_uq111 --style lt_c_uq111 --sld -o legend.sld.xml
     #[arg(long)]
     pub sld: bool,
+    /// 저장 경로.
+    /// 기본 "legend.png"(--sld 지정 시 이 기본값을 유지하면 자동으로 "legend.sld.xml"로 보정됨).
+    /// `--raw`(전역 옵션) 지정 시 파일 저장 대신 stdout으로 출력.
     #[arg(long, short, default_value = "legend.png")]
     pub output: std::path::PathBuf,
 }
@@ -132,32 +157,50 @@ pub enum TileKind {
 
 #[derive(Args, Debug)]
 pub struct TileArgs {
-    /// 스킴: wmts | tms | vector | vector-style | wmts-themes | wmts-capabilities.
+    /// 타일 스킴(필수 위치 인자).
+    /// 허용값: wmts | tms | vector | vector-style | wmts-themes | wmts-capabilities.
+    /// wmts/tms=래스터 타일, vector=MVT 바이너리(또는 --ext png/jpeg 지정 시 래스터),
+    /// vector-style=스타일 JSON, wmts-themes=해외위성영상 시계열, wmts-capabilities=능력문서(XML).
     pub scheme: String,
-    /// 레이어(WMTS: Base/white/midnight/Hybrid/Satellite, 벡터: Base/poi/traffic).
+    /// 레이어명.
+    /// WMTS/TMS: Base(기본)/white/midnight/Hybrid/Satellite.
+    /// 벡터 MVT: poi(z>=15부터 데이터)/traffic만 가능 — Base 지정 시 InvalidParameterValue 에러(실측).
+    /// Base를 벡터 계열로 쓰려면 --ext png/jpeg로 래스터 벡터 엔드포인트를 이용할 것.
     #[arg(long, default_value = "Base")]
     pub layer: String,
-    /// wmts-themes 전용: 테마 카테고리(예: cities).
+    /// wmts-themes 전용(필수): 테마 카테고리.
+    /// 예: --category cities.
     #[arg(long)]
     pub category: Option<String>,
-    /// wmts-themes 전용: 영상 연도(예: 2025).
+    /// wmts-themes 전용(필수): 영상 연도.
+    /// 예: --year 2025.
     #[arg(long)]
     pub year: Option<String>,
-    /// wmts-themes 전용: 도시명(예: Oslo).
+    /// wmts-themes 전용(필수): 도시명.
+    /// 예: --city Oslo.
     #[arg(long)]
     pub city: Option<String>,
-    /// 줌 레벨.
+    /// 줌 레벨. wmts/tms/vector/wmts-themes에서 --row --col과 함께 필수.
+    /// 예: --z 14.
     #[arg(long)]
     pub z: Option<u32>,
-    /// 타일 행(WMTS Y / 표기 주의 §1.3-결정1).
+    /// 타일 행.
+    /// **wmts/tms는 Y(--row=Y, --col=X), vector는 반대로 X(--row=X, --col=Y)**(실측 함정, §1.3-결정1).
+    /// tms는 CLI가 입력값(WMTS 기준 row)을 Y축 자동 반전 처리하므로 wmts와 동일한 값을 넣으면 된다.
     #[arg(long)]
     pub row: Option<u32>,
-    /// 타일 열(WMTS X).
+    /// 타일 열.
+    /// **wmts/tms는 X(--col=X), vector는 반대로 Y(--col=Y)**(실측 함정, §1.3-결정1). row 설명 참고.
     #[arg(long)]
     pub col: Option<u32>,
-    /// 타일 확장자(wmts/tms 기본: png, vector 기본: pbf, 래스터 벡터: png/jpeg).
+    /// 타일 확장자.
+    /// 기본: wmts/tms=png, vector(미지정 또는 pbf)=MVT(.pbf). vector에 png/jpeg 지정 시 래스터 벡터 엔드포인트로 전환.
+    /// 예: --ext png (vector 래스터), 미지정 시 vector는 자동 pbf.
     #[arg(long)]
     pub ext: Option<String>,
+    /// 저장 경로.
+    /// 미지정 시 스킴별 기본 파일명 사용(tile.{ext} / tile.mvt / style.json / WMTSCapabilities.xml).
+    /// `--raw`(전역 옵션) 지정 시 파일 저장 대신 stdout으로 출력.
     #[arg(long, short)]
     pub output: Option<std::path::PathBuf>,
 }

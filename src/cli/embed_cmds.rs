@@ -8,136 +8,186 @@ use clap::Args;
 
 #[derive(Args, Debug)]
 pub struct MapArgs {
-    /// 지도 종류: 2d | 3d | 3dsim | ol | marker | chart | theme.
-    /// (2d=3D엔진 평면모드 / ol=OpenLayers 2D 데이터레이어 데모)
-    #[arg(default_value = "2d")]
+    /// 지도 종류(위치 인자, 기본 "2d"). 생성되는 HTML의 성격을 결정한다.
+    // ponytail: 줄바꿈 보존을 위해 long_help 문자열 사용(doc comment는 clap이 한 문단으로 합침).
+    #[arg(
+        default_value = "2d",
+        long_help = "지도 종류(위치 인자, 기본 \"2d\"). 생성되는 HTML의 성격을 결정한다.\n\
+        \n\
+        \x202d          3D엔진(Cesium/WebGL) 평면 모드 기본 지도\n\
+        \x203d          3D 지구본(globe) 기본 지도\n\
+        \x203dsim       3D 분석·시뮬레이션 49종 — `--analysis <종류>`로 지정, `--analysis list`로 목록\n\
+        \x20ol          OpenLayers 2D 데이터레이어 — 폴리곤/GeoJSON/KML/경로/툴바. 데이터 시각화 기본 진입점\n\
+        \x20marker      마커+팝업 (--points <markers.json>)\n\
+        \x20chart       위치 기반 차트 (--data <chart.json> --type bar|stackedbar|pie)\n\
+        \x20theme       WMS 주제도 토글 (--layers \"이름:LAYER_ID,…\")\n\
+        \x20text        대량 포인트 클러스터링 (--file <points.txt>, 최대 500줄)\n\
+        \x20controller  2D/3D 전환 지도 (vw.MapController)\n\
+        \x20choropleth  단계구분도 (--geojson + --value-field 필수)\n\
+        \x203d-extrude  폴리곤 3D 돌출 지도 (deck.gl, --geojson + --elevation-field 필수)\n\
+        \n\
+        주의: 2d는 3D엔진의 평면모드이고, 실제 OpenLayers 2D 데이터레이어는 ol이다.\n\
+        데이터(GeoJSON/마커/차트/주제도)를 얹으려면 ol 계열(ol/marker/chart/theme/text/choropleth)을 쓴다."
+    )]
     pub kind: String,
-    /// 중심 좌표 "lon,lat". 분석 모드에선 지도 중심 이동(미지정 시 샘플 기본 위치 유지).
+    /// 중심 좌표 "lon,lat"(EPSG:4326, 경도,위도 순).
+    /// 기본 127.0,37.5. 분석 모드에선 지도 중심 이동(미지정 시 샘플 기본 위치 유지). --address가 지정되면 이 값보다 우선순위가 낮다.
+    /// 예: --center 127.0,37.5
     #[arg(long)]
     pub center: Option<String>,
     /// 중심 주소(분석/ol 모드) — geocode로 좌표 변환 후 지도 중심 이동. --center보다 우선.
+    /// 예: --address "남산공원길 105"
     #[arg(long)]
     pub address: Option<String>,
     /// 줌/높이 레벨.
+    /// 기본 11. KIND에 따라 지도 확대 수준 또는 카메라 높이로 해석된다.
     #[arg(long, default_value_t = 11)]
     pub zoom: u32,
-    /// 3D 분석·시뮬레이션 종류(3dsim 전용). `list`로 전체 목록 출력.
+    /// 3D 분석·시뮬레이션 종류(kind=3dsim 전용, 49종). `--analysis list`로 전체 목록(JSON)을 출력한다.
     /// 예: slope, terrainvolume, profile, sunlight, sunlightrights,
     /// sunlightslope, visiblearea, viewsurface, culheritalter, route,
-    /// buildingcontrol, heatmap, cluster, grid, hexbin.
+    /// buildingcontrol, heatmap, cluster, grid, hexbin(그 외 3.0 샘플 34종은 문서 참고).
+    /// 주의: 분석 결과값(경사도 분포·토공량 등)은 브라우저(Cesium/WebGL)에서만 계산되며 CLI는 값을 반환하지 않는다.
     #[arg(long)]
     pub analysis: Option<String>,
     /// HTML 파일로 저장(미지정 시 JSON으로 URL·스니펫 보고).
+    /// 예: -o map.html
     #[arg(long, short)]
     pub output: Option<std::path::PathBuf>,
 
     // --- 단계1: ol3(OpenLayers 2D) 데이터레이어 ---
-    /// 배경지도 종류(ol/marker/chart/theme): GRAPHIC | GRAPHIC_WHITE | GRAPHIC_NIGHT | PHOTO | PHOTO_HYBRID.
+    /// 배경지도 종류(kind=ol/marker/chart/theme에서 유효).
+    /// 허용값: GRAPHIC(기본) | GRAPHIC_WHITE | GRAPHIC_NIGHT | PHOTO | PHOTO_HYBRID.
+    /// 예: --basemap PHOTO
     #[arg(long)]
     pub basemap: Option<String>,
-    /// 인라인 폴리곤 좌표 "lon,lat;lon,lat;…"(ol). EPSG:4326 입력.
+    /// 인라인 폴리곤 좌표(kind=ol 전용). 형식 "lon,lat;lon,lat;…"(EPSG:4326, 최소 3정점).
+    /// 예: --polygon "127.0,37.5;127.01,37.5;127.01,37.51"
     #[arg(long)]
     pub polygon: Option<String>,
-    /// GeoJSON FeatureCollection 파일(ol). 4326 입력 → ol3 벡터 렌더(폴리곤/포인트/라인).
+    /// GeoJSON FeatureCollection 파일(kind=ol 전용). EPSG:4326 입력 → ol3 벡터 렌더(폴리곤/포인트/라인), extent 자동 맞춤.
+    /// 예: --geojson f.geojson
     #[arg(long)]
     pub geojson: Option<std::path::PathBuf>,
-    /// 마커 JSON 파일(marker): [{x,y,epsg?,title,contents,iconUrl?,text?}].
+    /// 마커 JSON 파일(kind=marker 전용).
+    /// 형식: [{x, y, epsg?, title, contents, iconUrl?, text?, attr?}] — epsg 기본 EPSG:4326(x=lon, y=lat).
+    /// 예: --points markers.json
     #[arg(long)]
     pub points: Option<std::path::PathBuf>,
-    /// 차트 JSON 파일(chart): [{pos:[lon,lat],title,size?,radius?,styles:[{color,label,legendLabel?}],values:[…]}].
+    /// 차트 JSON 파일(kind=chart 전용).
+    /// 형식: [{pos:[lon,lat], title, size?:[w,h], radius?(pie), styles:[{color,label,legendLabel?}], values:[…]}].
+    /// stackedbar는 values가 `[[…],[…]]` 형태로 중첩됨. 예: --data chart.json
     #[arg(long)]
     pub data: Option<std::path::PathBuf>,
-    /// 차트 종류(chart): bar | stackedbar | pie.
+    /// 차트 종류(kind=chart 전용). 허용값: bar | stackedbar | pie.
     #[arg(long = "type")]
     pub chart_type: Option<String>,
-    /// 차트 그룹 정렬(chart) — ChartGroup으로 묶어 표시.
+    /// 차트 그룹 정렬(kind=chart 전용) — ChartGroup으로 묶어 표시하는 부울 플래그.
     #[arg(long)]
     pub group: bool,
-    /// 주제도 WMS named layer(theme): "이름:LAYER_ID,이름:LAYER_ID".
+    /// 주제도 WMS named layer(kind=theme 전용).
+    /// 형식: "이름:LAYER_ID,이름:LAYER_ID"(콤마로 복수 레이어, 토글 버튼 생성).
+    /// 예: --layers "도시지역:LT_C_UQ111,관리지역:LT_C_UQ112"
     #[arg(long)]
     pub layers: Option<String>,
-    /// 줌 슬라이더 컨트롤(PanZoomBar) 표시(ol).
+    /// 줌 슬라이더 컨트롤(kind=ol 전용) — PanZoomBar 표시하는 부울 플래그.
     #[arg(long)]
     pub zoom_control: bool,
-    /// 배경지도 전환 버튼 표시(ol).
+    /// 배경지도 전환 버튼 표시(kind=ol 전용) — 부울 플래그.
     #[arg(long)]
     pub basemap_switch: bool,
-    /// 클릭 시 좌표 팝업 활성화(ol).
+    /// 클릭 시 좌표 팝업 활성화(kind=ol 전용) — 부울 플래그.
     #[arg(long)]
     pub popup: bool,
 
     // --- 단계2: TEXTLayer / KMLLayer ---
-    /// KML 레이어 URL(ol) — 외부 KML. 절대경로 https만(자기완결·CORS).
+    /// KML 레이어 URL(kind=ol 전용) — 외부 KML. 절대경로 https만 허용(자기완결·CORS 정책).
+    /// 예: --kml https://example.com/layer.kml
     #[arg(long)]
     pub kml: Option<String>,
-    /// 대량 포인트 TEXT 파일(text) — vworld TEXT 포맷, 자기완결 임베드(최대 500줄).
+    /// 대량 포인트 TEXT 파일(kind=text 전용) — vworld TEXT 포맷(탭 구분: lon\tlat\ttitle\tdesc\ticonSize, 헤더 1줄).
+    /// 자기완결 임베드(최대 500줄, 초과 시 거부). 예: --file points.txt
     #[arg(long)]
     pub file: Option<std::path::PathBuf>,
-    /// 좌표계(text): 기본 EPSG:4326.
+    /// 좌표계(kind=text 전용). 기본 EPSG:4326.
     #[arg(long)]
     pub epsg: Option<String>,
-    /// 포인트 클러스터링 거리(text): 기본 40.
+    /// 포인트 클러스터링 거리(kind=text 전용, 픽셀 단위). 기본 40.
     #[arg(long, default_value_t = 40)]
     pub distance: u32,
 
     // --- 추가 컨트롤·경로(잔여 구현) ---
-    /// 미니맵(OverviewMap) 표시(ol).
+    /// 미니맵(kind=ol 전용) — OverviewMap 표시하는 부울 플래그.
     #[arg(long)]
     pub overview: bool,
-    /// 측정 툴바(ToolBar: 거리·면적·이동·전체보기 등 11종) 표시(ol).
+    /// 측정 툴바(kind=ol 전용) — ToolBar(거리·면적·이동·전체보기 등 11종) 표시하는 부울 플래그.
     #[arg(long)]
     pub toolbar: bool,
-    /// 사전 경로 좌표 "lon,lat;lon,lat;…"(ol) — RouteMap 폴리라인 표시(최소 2점, EPSG:4326).
+    /// 사전 경로 좌표(kind=ol 전용). 형식 "lon,lat;lon,lat;…"(EPSG:4326, 최소 2점) — RouteMap 폴리라인 표시.
     #[arg(long)]
     pub route: Option<String>,
 
     // --- choropleth / 3d-extrude ---
-    /// 색칠 기준 properties 수치 키 (choropleth/3d-extrude 전용).
+    /// 색칠 기준 properties 수치 키(kind=choropleth 필수, 3d-extrude는 선택 — 미지정 시 elevation-field 재사용).
+    /// GeoJSON feature의 properties에 있는 숫자(또는 숫자로 파싱 가능한 문자열) 필드명.
+    /// 예: --value-field 인구
     #[arg(long)]
     pub value_field: Option<String>,
-    /// 높이로 쓸 properties 수치 키 (3d-extrude 전용, 필수).
+    /// 높이로 쓸 properties 수치 키(kind=3d-extrude 전용, 필수).
+    /// GeoJSON feature의 properties에서 3D 돌출 높이 계산에 쓸 숫자 필드명.
+    /// 예: --elevation-field 인구
     #[arg(long)]
     pub elevation_field: Option<String>,
-    /// 높이 스케일: "auto"(기본, 데이터 정규화) 또는 수치(h = v * scale) (3d-extrude 전용).
+    /// 높이 스케일(kind=3d-extrude 전용).
+    /// "auto"(기본, 전체 값 범위를 --max-height로 정규화) 또는 수치 문자열(h = v * scale, 고정 배율).
+    /// 예: --elevation-scale auto / --elevation-scale 0.5
     #[arg(long, default_value = "auto")]
     pub elevation_scale: String,
-    /// auto 스케일 시 최대 높이(맵 단위, 기본 4000.0) (3d-extrude 전용).
+    /// auto 스케일 시 최대 높이(kind=3d-extrude 전용, 미터 단위). 기본 4000.0.
     #[arg(long, default_value_t = 4000.0f64)]
     pub max_height: f64,
-    /// 카메라 틸트 각도(기본 50.0) (3d-extrude 전용).
+    /// 카메라 틸트 각도(kind=3d-extrude 전용). 기본 50.0(도 단위, 값이 클수록 위에서 내려다봄).
     #[arg(long, default_value_t = 50.0f64)]
     pub pitch: f64,
-    /// 색상 램프(choropleth): ylorrd(기본)|blues|greens|reds|viridis.
+    /// 색상 램프(kind=choropleth/3d-extrude 공용).
+    /// 허용값: ylorrd(기본) | blues | greens | reds | viridis | rdylbu.
+    /// rdylbu만 diverging(파랑↔빨강) 풀레인지 스케일이고, 나머지는 흰색·검정 극단을 자동 회피.
+    /// 예: --color-scale rdylbu
     #[arg(long, default_value = "ylorrd")]
     pub color_scale: String,
-    /// 구간 수(choropleth, 기본 5).
+    /// 구간 수(kind=choropleth/3d-extrude 공용). 기본 5.
     #[arg(long, default_value_t = 5u8)]
     pub classes: u8,
-    /// 구간 분류 방법(choropleth): quantile(기본)|equal.
+    /// 구간 분류 방법(kind=choropleth/3d-extrude 공용).
+    /// 허용값: quantile(기본, 데이터 개수 균등) | equal(값 범위 균등). --breaks 지정 시 무시됨.
     #[arg(long, default_value = "quantile")]
     pub class_method: String,
-    /// 수동 경계값 "a,b,c,d"(choropleth). 지정 시 class-method 무시.
+    /// 수동 경계값(kind=choropleth/3d-extrude 공용). 형식 "a,b,c,d"(오름차순 구간 경계).
+    /// 지정 시 --class-method(quantile/equal)는 무시된다.
     #[arg(long)]
     pub breaks: Option<String>,
-    /// 값 없는 feature 색(choropleth, 기본 #cccccc).
+    /// 값 없는 feature 색(kind=choropleth/3d-extrude 공용). 기본 "#cccccc"(hex 컬러 코드).
     #[arg(long, default_value = "#cccccc")]
     pub no_data_color: String,
-    /// 채움 투명도(choropleth, 0-1, 기본 0.78).
+    /// 채움 투명도(kind=choropleth/3d-extrude 공용). 0.0~1.0 범위. 기본 0.78.
     #[arg(long, default_value_t = 0.78f32)]
     pub opacity: f32,
-    /// 범례 표시(choropleth).
+    /// 범례 표시(kind=choropleth/3d-extrude 공용) — 부울 플래그.
+    /// 표시 내용: 제목 + 최저·최고 요약 + 색 스와치 + 구간 라벨(천단위 콤마 포맷).
     #[arg(long)]
     pub legend: bool,
-    /// 범례 제목(미지정 시 --value-field 값). 예: --legend-title 인구
+    /// 범례 제목(kind=choropleth/3d-extrude 공용, 한글 가능). 미지정 시 --value-field 값을 사용.
+    /// 예: --legend-title 인구
     #[arg(long)]
     pub legend_title: Option<String>,
-    /// 범례 위치: top-right(기본)|top-left|bottom-right|bottom-left
+    /// 범례 위치(kind=choropleth/3d-extrude 공용).
+    /// 허용값: top-right(기본) | top-left | bottom-right | bottom-left.
     #[arg(long, default_value = "top-right")]
     pub legend_pos: String,
-    /// 주소 검색창을 숨긴다(데이터 시각화 전용 지도).
+    /// 주소 검색창을 숨긴다(데이터 시각화 전용 지도) — 부울 플래그. choropleth/3d-extrude 등에서 유용.
     #[arg(long)]
     pub no_search: bool,
-    /// 생성 HTML을 OS 기본 브라우저로 열기(-o 저장된 경우만).
+    /// 생성 HTML을 OS 기본 브라우저로 열기(-o로 파일 저장된 경우에만 동작) — 부울 플래그.
     #[arg(long)]
     pub open: bool,
 }

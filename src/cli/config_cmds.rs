@@ -8,24 +8,57 @@ use crate::output;
 use anyhow::Result;
 use clap::Subcommand;
 
+/// 인증키·설정 관리 서브커맨드.
+///
+/// 설정 파일은 `~/.vworld/config.toml`(Windows: `%USERPROFILE%\.vworld\config.toml`)에
+/// 저장되며, `--config`(전역 옵션)로 경로를 오버라이드할 수 있다. 여기에 등록된 모든 키는
+/// 다른 모든 명령에서 동시성 키 풀에 자동 편입되어 `--concurrency`로 병렬 사용된다.
 #[derive(Subcommand, Debug)]
 pub enum ConfigCmd {
     /// API 키 추가(중복 거부). 별칭·도메인 선택.
+    ///
+    /// 발급받은 VWorld 인증키를 설정파일에 등록한다. 이미 등록된 키(동일 값)는 거부된다.
+    /// `--alias`는 `list-keys`/`remove-key`에서 식별하기 쉽도록 붙이는 이름표.
+    ///
+    /// 예) `vworld config add-key <KEY> --alias main`
     AddKey {
+        /// 등록할 VWorld 인증키 원문.
         key: String,
+        /// 키 식별용 별칭(선택). 목록/제거 시 값 대신 참조용으로 표시된다.
         #[arg(long)]
         alias: Option<String>,
         /// 도메인 등록 키의 referer/domain.
+        ///
+        /// 발급 시 특정 도메인에 등록한 키라면 그 도메인을 지정한다. 이후 이 키로
+        /// 요청할 때마다 자동 적용되며, 전역 `--referer`로 그때그때 덮어쓸 수 있다.
+        /// 무도메인(서버용) 키는 생략한다.
         #[arg(long)]
         referer: Option<String>,
     },
     /// 등록 키 목록(마스킹).
+    ///
+    /// 설정파일에 등록된 모든 키를 별칭과 함께 마스킹된 형태(앞뒤 일부만 노출)로 나열한다.
+    /// 원문 키 값은 노출하지 않는다.
     ListKeys,
     /// 키 제거(값 또는 인덱스).
-    RemoveKey { target: String },
+    ///
+    /// `list-keys` 출력의 인덱스 번호, 또는 키 원문 값(별칭이 아님)을 지정해 제거한다.
+    ///
+    /// 예) `vworld config remove-key 0`
+    RemoveKey {
+        /// 제거할 키의 인덱스(list-keys 기준) 또는 키 원문 값.
+        target: String,
+    },
     /// 각 키를 실 VWorld 호출로 검증(유효/만료/도메인불일치).
+    ///
+    /// 등록된 각 키로 실제 지오코딩 1건을 호출해 유효성을 판정한다(네트워크·API 실호출,
+    /// 목업 아님). 도메인불일치로 판정되면 해결 방법(적절한 `--referer` 설정 또는
+    /// 무도메인 키 재발급)을 함께 안내한다.
     TestKeys,
     /// 설정파일 실제 경로 출력.
+    ///
+    /// 현재 적용될 설정파일의 절대경로와 실제 존재 여부를 출력한다.
+    /// 파일이 없어도 에러 없이 기본 경로를 보고한다(경로 확인 목적).
     Path,
 }
 
