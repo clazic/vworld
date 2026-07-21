@@ -179,7 +179,7 @@ vworld geocode "세종대로 110"
 vworld geocode "126.978,37.566"
 
 # 좌표·지번·도로명 통합 1회 조회
-vworld geocoder "경상남도 고성군 하이면 덕명리 420-1"
+vworld geocoder "울산광역시 남구 삼산중로6"
 
 # 장소/건물 검색
 vworld search "광화문" --type PLACE
