@@ -248,6 +248,142 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 | `hjd-db build` | 행정동 경계 DB 생성 (--by-hjd 고속화용, 선택) |
 | `update` | 자가 업데이트 — 바이너리 교체 + 스킬 파일 갱신 (SHA256 검증) |
 
+### 국가중점데이터(NED) 115종 오퍼레이션 전체 목록
+
+`vworld ned --list`로 확인 가능한 115종 오퍼레이션 전수입니다. 오퍼레이션 이름을 그대로 `vworld ned <오퍼레이션>`에 사용합니다. 종류별 반환 데이터: **WMS** = 지도 이미지(PNG), **WFS** = 공간 도형+속성(GML/JSON), **속성** = 속성 데이터(XML/JSON).
+
+#### 공간융합 개방데이터 (18종)
+
+| # | 오퍼레이션 | 서비스명 | 보여주는 데이터 |
+|---|-----------|----------|----------------|
+| 1 | `getBuildingAgeWMS` | 건축물연령 WMS조회 | 건물의 연령(건축 후 경과연수) 분포를 지도 이미지로 표출 |
+| 2 | `getBuildingAgeWFS` | 건축물연령 WFS조회 | 건물 연령 정보가 붙은 건물 도형(공간객체) |
+| 3 | `getBuildingAge` | 건축물연령 속성조회 | 필지(PNU) 단위 건물 연령 속성값 |
+| 4 | `getBuildingUseWMS` | 용도별건물 WMS조회 | 주거·상업·공업 등 용도별 건물 분포 지도 이미지 |
+| 5 | `getBuildingUseWFS` | 용도별건물 WFS조회 | 용도 정보가 붙은 건물 도형 |
+| 6 | `getBuildingUse` | 용도별건물 속성조회 | 필지(PNU) 단위 건물 용도 속성값 |
+| 7 | `getByRegionWMS` | 지역별 지가변동률 WMS조회 | 기준연월의 지역(시군구)별 지가변동률 지도 이미지 |
+| 8 | `getByRegion` | 지역별 지가변동률 속성조회 | 지역별 월간 지가변동률 수치(%) |
+| 9 | `getLargeCLByRegion` | 권역별 지가변동률 속성조회 | 수도권 등 대권역 단위 지가변동률 수치 |
+| 10 | `getByZoningWMS` | 용도지역별 지가변동률 WMS조회 | 용도지역(주거·상업 등)별 지가변동률 지도 이미지 |
+| 11 | `getByZoning` | 용도지역별 지가변동률 속성조회 | 용도지역별 월간 지가변동률 수치 |
+| 12 | `getLargeCLByZoning` | 권역별 용도지역별 지가변동률 속성조회 | 권역×용도지역 교차 지가변동률 수치 |
+| 13 | `getByLandCategoryWMS` | 이용상황별 지가변동률 WMS조회 | 토지 이용상황(전·답·대지 등)별 지가변동률 지도 이미지 |
+| 14 | `getByLandCategory` | 이용상황별 지가변동률 속성조회 | 이용상황별 월간 지가변동률 수치 |
+| 15 | `getLargeCLByLandCategory` | 권역별 이용상황별 지가변동률 속성조회 | 권역×이용상황 교차 지가변동률 수치 |
+| 16 | `getLandCharacteristicsWMS` | 토지특성 WMS조회 | 토지특성(지목·지형 등) 분포 지도 이미지 |
+| 17 | `getLandCharacteristicsWFS` | 토지특성 WFS조회 | 토지특성 정보가 붙은 필지 도형 |
+| 18 | `getLandCharacteristics` | 토지특성 속성조회 | 필지(PNU)의 지목·면적·지형·도로접면 등 토지특성 속성 |
+
+#### 국가공간 개방데이터 (45종)
+
+| # | 오퍼레이션 | 서비스명 | 보여주는 데이터 |
+|---|-----------|----------|----------------|
+| 19 | `getGisGnrlBuildingWMS` | GIS건물일반정보 WMS조회 | 일반건물(단독주택 등) 위치 지도 이미지 |
+| 20 | `getGisGnrlBuildingWFS` | GIS건물일반정보 WFS조회 | 일반건물 도형+속성 |
+| 21 | `getGisAggrBuildingWMS` | GIS건물집합정보 WMS조회 | 집합건물(아파트·연립 등) 위치 지도 이미지 |
+| 22 | `getGisAggrBuildingWFS` | GIS건물집합정보 WFS조회 | 집합건물 도형+속성 |
+| 23 | `getIndvdLandPriceWMS` | 개별공시지가 WMS조회 | 필지별 개별공시지가 분포 지도 이미지 |
+| 24 | `getIndvdLandPriceWFS` | 개별공시지가 WFS조회 | 공시지가가 붙은 필지 도형 |
+| 25 | `getIndvdLandPriceAttr` | 개별공시지가 속성조회 | 필지(PNU)별 ㎡당 개별공시지가(연도별) |
+| 26 | `getIndvdHousingPriceWMS` | 개별주택가격 WMS조회 | 개별(단독)주택 공시가격 분포 지도 이미지 |
+| 27 | `getIndvdHousingPriceWFS` | 개별주택가격 WFS조회 | 주택가격이 붙은 개별주택 도형 |
+| 28 | `getIndvdHousingPriceAttr` | 개별주택가격 속성조회 | 필지(PNU)별 개별주택 공시가격 |
+| 29 | `getApartHousingPriceWMS` | 공동주택가격 WMS조회 | 공동주택(아파트·연립·다세대) 공시가격 분포 지도 이미지 |
+| 30 | `getApartHousingPriceWFS` | 공동주택가격 WFS조회 | 공동주택가격이 붙은 건물 도형 |
+| 31 | `getApartHousingPriceAttr` | 공동주택가격 속성조회 | 필지(PNU)·동·호별 공동주택 공시가격 |
+| 32 | `getIslandsWMS` | 도서정보 WMS조회 | 도서(섬) 위치 지도 이미지 |
+| 33 | `getIslandsWFS` | 도서정보 WFS조회 | 섬 경계 도형+속성 |
+| 34 | `getIslandsAttr` | 도서정보 속성조회 | 섬의 명칭·면적·유인/무인 구분 등 속성 |
+| 35 | `getEstateDevlopWMS` | 부동산개발업 WMS조회 | 부동산개발업 등록업체 위치 지도 이미지 |
+| 36 | `getEstateDevlopWFS` | 부동산개발업 WFS조회 | 개발업체 위치 도형+속성 |
+| 37 | `getEDBasicInfo` | 부동산개발업 기본정보조회 | 개발업 등록업체 기본정보(등록번호·상호 등) |
+| 38 | `getEDOfficeInfo` | 부동산개발업 사무소정보조회 | 개발업체 사무소 소재지 정보 |
+| 39 | `getEDBusinessResultsInfo` | 부동산개발업 사업실적정보조회 | 개발업체의 사업 실적 내역 |
+| 40 | `getEDViolationInfo` | 부동산개발업 위반사항정보조회 | 개발업체의 법령 위반·행정처분 내역 |
+| 41 | `getEstateBrkpgWMS` | 부동산중개업 WMS조회 | 부동산중개업소 위치 지도 이미지 |
+| 42 | `getEstateBrkpgWFS` | 부동산중개업 WFS조회 | 중개업소 위치 도형+속성 |
+| 43 | `getEBOfficeInfo` | 부동산중개업 사무소정보조회 | 중개사무소 명칭·소재지·등록번호 정보 |
+| 44 | `getEBBrokerInfo` | 부동산중개업자정보조회 | 개업공인중개사(중개업자) 정보 |
+| 45 | `getPossessionWMS` | 토지소유정보 WMS조회 | 토지 소유구분(국유·공유·사유 등) 분포 지도 이미지 |
+| 46 | `getPossessionWFS` | 토지소유정보 WFS조회 | 소유구분이 붙은 필지 도형 |
+| 47 | `getPossessionAttr` | 토지소유정보 속성조회 | 필지(PNU)별 소유구분·소유권변동 속성 |
+| 48 | `getLandMoveAttr` | 토지이동이력 속성조회 | 필지의 분할·합병·지목변경 등 토지이동 이력 |
+| 49 | `getLandUseWMS` | 토지이용계획 WMS조회 | 용도지역·지구 등 토지이용계획 지정 현황 지도 이미지 |
+| 50 | `getLandUseWFS` | 토지이용계획 WFS조회 | 토지이용계획 지정 구역 도형 |
+| 51 | `getLandUseAttr` | 토지이용계획 속성조회 | 필지(PNU)에 지정된 용도지역·지구 등 토지이용계획 내용 |
+| 52 | `getAreaOfLandCategory` | 국토 지목별 현황조회 | 전국 지목별 토지 면적 통계 |
+| 53 | `getPriceOfLandCategory` | 국토 지목별 토지가격 현황조회 | 지목별 토지가격 총액 통계 |
+| 54 | `getPossessionByAge` | 국토 소유연령별 현황조회 | 소유자 연령대별 국토 소유 면적 통계 |
+| 55 | `getChangeOfLandCategory` | 토지 지목변동 현황조회 | 지목 변동(전→대지 등) 건수·면적 통계 |
+| 56 | `getNumberOfOwner` | 토지 소유자수 현황조회 | 지역별 토지 소유자 수 통계 |
+| 57 | `getNumberOfHouseholds` | 토지 소유세대수 현황조회 | 지역별 토지 소유 세대수 통계 |
+| 58 | `getLandholdingByAge` | 연령대별 토지소유 현황조회 | 연령대별 토지 소유 현황 통계 |
+| 59 | `getLandholdingByResidence` | 거주지별 토지소유 현황조회 | 소유자 거주지 기준 토지 소유 현황 통계 |
+| 60 | `getIndvdLandPrice` | 개별공시지가 기본현황조회 | 개별공시지가 산정 필지수·평균지가 등 기본 현황 통계 |
+| 61 | `getReferLandPriceWMS` | 표준지공시지가 WMS조회 | 표준지 공시지가 분포 지도 이미지 |
+| 62 | `getReferLandPriceWFS` | 표준지공시지가 WFS조회 | 표준지 필지 도형+공시지가 |
+| 63 | `getReferLandPriceAttr` | 표준지공시지가 속성조회 | 표준지 필지의 ㎡당 공시지가 속성 |
+
+#### 부동산 개방데이터 (52종)
+
+| # | 오퍼레이션 | 서비스명 | 보여주는 데이터 |
+|---|-----------|----------|----------------|
+| 64 | `BldgisSpceService` | GIS건물통합 WMS조회 | 일반+집합 건물통합 도형 지도 이미지 |
+| 65 | `getBldgisSpceWFS` | GIS건물통합 WFS조회 | 건물통합(일반+집합) 도형+속성 |
+| 66 | `cnrdlnList` | 공유지연명 목록조회 | 공유 필지(PNU)의 공유자 연명부 목록 |
+| 67 | `ldaregList` | 대지권등록 목록조회 | 집합건물 대지권 등록부 목록 |
+| 68 | `buldSnList` | 건물일련번호조회 | 필지(PNU) 내 건물 일련번호 목록 |
+| 69 | `buldCongNmList` | 건물동명조회 | 집합건물의 동(棟) 명칭 목록 |
+| 70 | `buldFloorCoList` | 건물층수조회 | 건물의 층수 정보 목록 |
+| 71 | `buldHoCoList` | 건물호수조회 | 건물의 호수(호실) 정보 목록 |
+| 72 | `buldRlnmList` | 건물실명조회 | 건물 실(室) 명칭 정보 목록 |
+| 73 | `AdresSpceService` | 법정구역도조회 (WMS) | 시도·시군구·읍면동·리 법정구역 경계 지도 이미지 |
+| 74 | `getAdresSpceWFS` | 법정구역도 WFS조회 | 법정구역 경계 도형+속성 |
+| 75 | `amdList` | 동명조회 | 동 이름으로 법정동 코드·소속 검색 |
+| 76 | `admCodeList` | 시/도조회 | 전국 시·도 법정동 코드 목록 |
+| 77 | `admSiList` | 시군구조회 | 시·도 하위 시군구 코드 목록 |
+| 78 | `admDongList` | 읍면동조회 | 시군구 하위 읍면동 코드 목록 |
+| 79 | `admReeList` | 리조회 | 읍면동 하위 리(里) 코드 목록 |
+| 80 | `CtnlgsSpceService` | 연속지적도조회 (WMS) | 필지 경계 연속지적도 지도 이미지 |
+| 81 | `getCtnlgsSpceWFS` | 연속지적도 WFS조회 | 필지 경계 도형 — `--dxf`/`--shp` 내보내기 지원 |
+| 82 | `IndstrySpceService` | 공업주제도조회 (WMS) | 산업단지 등 공업 관련 용도지역·지구 지도 이미지 |
+| 83 | `getIndstrySpceWFS` | 공업주제도 WFS조회 | 공업 관련 지역·지구 구역 도형 |
+| 84 | `EdcClturSpceService` | 교육문화주제도조회 (WMS) | 학교환경위생정화구역·문화재보호구역 등 교육문화 지역·지구 지도 이미지 |
+| 85 | `getEdcClturSpceWFS` | 교육문화주제도 WFS조회 | 교육문화 관련 지역·지구 구역 도형 |
+| 86 | `TrnsportSpceService` | 교통주제도조회 (WMS) | 도로구역·접도구역 등 교통 관련 지역·지구 지도 이미지 |
+| 87 | `getTrnsportSpceWFS` | 교통주제도 WFS조회 | 교통 관련 지역·지구 구역 도형 |
+| 88 | `TritPlnSpceService` | 국토계획주제도조회 (WMS) | 도시관리계획(용도지역·지구·구역) 지도 이미지 |
+| 89 | `getTritPlnSpceWFS` | 국토계획주제도 WFS조회 | 국토계획 용도지역·지구 구역 도형 |
+| 90 | `TritGnrlzSpceService` | 국토종합주제도조회 (WMS) | 개발제한구역 등 국토 종합 지역·지구 지도 이미지 |
+| 91 | `getTritGnrlzSpceWFS` | 국토종합주제도 WFS조회 | 국토종합 지역·지구 구역 도형 |
+| 92 | `FarmngSpceService` | 농업주제도조회 (WMS) | 농업진흥구역·농업보호구역 등 농업 관련 지역 지도 이미지 |
+| 93 | `getFarmngSpceWFS` | 농업주제도 WFS조회 | 농업 관련 지역·지구 구역 도형 |
+| 94 | `CtySpceService` | 도시주제도조회 (WMS) | 도시개발구역·정비구역 등 도시 관련 지역·지구 지도 이미지 |
+| 95 | `getCtySpceWFS` | 도시주제도 WFS조회 | 도시 관련 지역·지구 구역 도형 |
+| 96 | `MtstSpceService` | 산림주제도조회 (WMS) | 보전산지·산림보호구역 등 산림 관련 지역 지도 이미지 |
+| 97 | `getMtstSpceWFS` | 산림주제도 WFS조회 | 산림 관련 지역·지구 구역 도형 |
+| 98 | `MarnSpceService` | 수산주제도조회 (WMS) | 수산자원보호구역 등 수산 관련 지역 지도 이미지 |
+| 99 | `getMarnSpceWFS` | 수산주제도 WFS조회 | 수산 관련 지역·지구 구역 도형 |
+| 100 | `MarnResrceSpceService` | 수자원주제도조회 (WMS) | 상수원보호구역·하천구역 등 수자원 관련 지역 지도 이미지 |
+| 101 | `getMarnResrceSpceWFS` | 수자원주제도 WFS조회 | 수자원 관련 지역·지구 구역 도형 |
+| 102 | `MsfrtnSpceService` | 재난주제도조회 (WMS) | 재해위험지구 등 재난 관련 지역·지구 지도 이미지 |
+| 103 | `getMsfrtnSpceWFS` | 재난주제도 WFS조회 | 재난 관련 지역·지구 구역 도형 |
+| 104 | `AreaSpceService` | 지역주제도조회 (WMS) | 지역개발 관련 용도지역·지구 지도 이미지 |
+| 105 | `getAreaSpceWFS` | 지역주제도 WFS조회 | 지역개발 관련 지역·지구 구역 도형 |
+| 106 | `EnvrnEnergySpceService` | 환경에너지주제도조회 (WMS) | 환경·에너지 관련 보호구역·지역·지구 지도 이미지 |
+| 107 | `getEnvrnEnergySpceWFS` | 환경에너지주제도 WFS조회 | 환경·에너지 관련 지역·지구 구역 도형 |
+| 108 | `LgstspSpceService` | 지적도근점조회 (WMS) | 지적측량 기준점(지적도근점) 위치 지도 이미지 |
+| 109 | `getLgstspSpceWFS` | 지적도근점 WFS조회 | 지적도근점 위치 도형+속성 |
+| 110 | `LgstgsSpceService` | 지적삼각보조점조회 (WMS) | 지적삼각보조점 위치 지도 이미지 |
+| 111 | `getLgstgsSpceWFS` | 지적삼각보조점 WFS조회 | 지적삼각보조점 위치 도형+속성 |
+| 112 | `LgstrgSpceService` | 지적삼각점조회 (WMS) | 지적삼각점 위치 지도 이미지 |
+| 113 | `getLgstrgSpceWFS` | 지적삼각점 WFS조회 | 지적삼각점 위치 도형+속성 |
+| 114 | `ladgrdList` | 토지등급 목록조회 | 필지(PNU)의 과거 토지등급(과세 기준) 이력 목록 |
+| 115 | `ladfrlList` | 토지임야 목록조회 | 필지(PNU)의 토지(임야)대장 기본 목록 |
+
+> 파라미터·엔드포인트 상세는 [references/docs/national_data_catalog.md](references/docs/national_data_catalog.md) 참고. WMS 계열은 `crs, bbox, width, height, format` 필수(지가변동률 계열은 `stdrYear, stdrMt, reqLvl` 추가), 속성 계열은 다수가 `pnu` 필수.
+
 ### WMS/WFS 지원 좌표계
 
 `wms`/`wfs` 명령의 `--crs`에 지정할 수 있는 좌표계 ([공식 가이드](https://www.vworld.kr/dev/v4dv_wmsguide2_s001.do) 기준):
