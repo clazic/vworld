@@ -62,19 +62,21 @@ pub fn build_from_shp(shp_path: &Path, db_path: &Path) -> Result<usize> {
     let dongs = read_all(shp_path)?;
     let conn = Connection::open(db_path)
         .with_context(|| format!("DB 열기 실패: {}", db_path.display()))?;
-    conn.execute_batch(
-        "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
-         DROP TABLE IF EXISTS hjd;
-         CREATE TABLE hjd(
-            id INTEGER PRIMARY KEY,
-            adm_nm TEXT NOT NULL,
-            adm_cd TEXT,
-            minx REAL, miny REAL, maxx REAL, maxy REAL,
-            geom BLOB NOT NULL
-         );",
-    )?;
+    // DROP·CREATE·INSERT·INDEX를 한 트랜잭션으로 — 중단·실패 시 기존 테이블이 그대로 남는다.
+    // (journal OFF + 트랜잭션 밖 DROP이면 중단 시 기존 DB가 반쯤 빈 채로 남았음.)
+    // 같은 파일에 region_code도 있어 임시파일 교체 대신 트랜잭션을 쓴다.
     {
         let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "DROP TABLE IF EXISTS hjd;
+             CREATE TABLE hjd(
+                id INTEGER PRIMARY KEY,
+                adm_nm TEXT NOT NULL,
+                adm_cd TEXT,
+                minx REAL, miny REAL, maxx REAL, maxy REAL,
+                geom BLOB NOT NULL
+             );",
+        )?;
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO hjd(adm_nm,adm_cd,minx,miny,maxx,maxy,geom) VALUES(?,?,?,?,?,?,?)",
@@ -91,10 +93,10 @@ pub fn build_from_shp(shp_path: &Path, db_path: &Path) -> Result<usize> {
                 ])?;
             }
         }
+        // bbox 영역질의 가속용 인덱스.
+        tx.execute_batch("CREATE INDEX idx_hjd_bbox ON hjd(minx,maxx,miny,maxy);")?;
         tx.commit()?;
     }
-    // bbox 영역질의 가속용 인덱스.
-    conn.execute_batch("CREATE INDEX idx_hjd_bbox ON hjd(minx,maxx,miny,maxy);")?;
     Ok(dongs.len())
 }
 
@@ -129,20 +131,20 @@ pub fn build_region_from_xlsx(xlsx_path: &Path, sheet: &str, db_path: &Path) -> 
 
     let conn = Connection::open(db_path)
         .with_context(|| format!("DB 열기 실패: {}", db_path.display()))?;
-    conn.execute_batch(
-        "DROP TABLE IF EXISTS region_code;
-         CREATE TABLE region_code(
-            adm_cd TEXT PRIMARY KEY,
-            sido_cd TEXT, sido_nm TEXT,
-            sgg_cd TEXT,  sgg_nm TEXT,
-            emd_cd TEXT,  emd_nm TEXT,
-            period TEXT
-         );",
-    )?;
-
     let mut n = 0usize;
     {
+        // DROP·CREATE·INSERT를 한 트랜잭션으로(중단 시 기존 테이블 보존).
         let tx = conn.unchecked_transaction()?;
+        tx.execute_batch(
+            "DROP TABLE IF EXISTS region_code;
+             CREATE TABLE region_code(
+                adm_cd TEXT PRIMARY KEY,
+                sido_cd TEXT, sido_nm TEXT,
+                sgg_cd TEXT,  sgg_nm TEXT,
+                emd_cd TEXT,  emd_nm TEXT,
+                period TEXT
+             );",
+        )?;
         {
             let mut stmt = tx.prepare(
                 "INSERT OR REPLACE INTO region_code(adm_cd,sido_cd,sido_nm,sgg_cd,sgg_nm,emd_cd,emd_nm,period)
