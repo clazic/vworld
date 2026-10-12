@@ -3,22 +3,9 @@
 //! 설계: `.omc/plans/2026-06-16-vworld-cli-ai-구현계획.md`
 //! 레퍼런스: `references/docs/rest_api_catalog.md`, `references/docs/national_data_catalog.md`
 
-mod api;
-mod cli;
-mod concurrency;
-mod config;
-mod dxf;
-mod geomath;
-mod hjd_db;
-mod hjd_shp;
-mod ned_registry;
-mod output;
-mod shp;
-mod twod_registry;
-mod update;
-
 use clap::Parser;
-use cli::Cli;
+use vworld::cli::{self, Cli};
+use vworld::{output, update};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
