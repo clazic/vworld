@@ -140,6 +140,12 @@ pub async fn run_geocode(g: &GlobalArgs, a: GeocodeArgs) -> Result<()> {
         let (url, params) = b.build();
         let body = client.get_text(&url, params, auth).await?;
         let v = normalize::parse_to_json(&body)?;
+        // 키 만료·쿼터 초과를 "결과 없음"으로 오인하지 않도록 본문 에러 먼저 검사.
+        if let Err(e) = normalize::check_body_error(&v) {
+            if !e.empty_ok {
+                return Err(anyhow!("{e}"));
+            }
+        }
         if geocode_has_result(&v, reverse) {
             if g.raw {
                 return output::print_raw_text(&body);
@@ -1603,6 +1609,12 @@ async fn run_ned_by_hjd(
                     .build();
                 let body = client.get_text(&url, params, &auth).await?;
                 let v = normalize::parse_to_json(&body)?;
+                // 본문 에러는 Err → 재시도 라운드/미해결에러로 집계(비대상으로 오분류 방지).
+                if let Err(e) = normalize::check_body_error(&v) {
+                    if !e.empty_ok {
+                        return Err(anyhow!("{e}"));
+                    }
+                }
                 Ok::<(usize, Option<(String, String)>), anyhow::Error>((i, extract_hjd(&v)))
             }
         })
@@ -1840,6 +1852,34 @@ async fn resilient_get_text(
     Err(last.unwrap_or_else(|| anyhow!("harvest GET 반복 실패")))
 }
 
+/// WFS 응답의 `features` 배열. 없으면 에러 본문(ServiceException·키 만료 등) —
+/// 빈 배열로 삼키면 전수 수집이 조용히 누락된 채 `ok:true`가 된다.
+fn wfs_features(body: &str) -> Result<Vec<Value>> {
+    let v = normalize::parse_to_json(body)?;
+    match v.get("features").and_then(|f| f.as_array()) {
+        Some(a) => Ok(a.clone()),
+        None => Err(anyhow!("WFS 에러 응답: {}", body.chars().take(300).collect::<String>())),
+    }
+}
+
+/// WFS 카운트 프로브 응답의 `totalFeatures`. 에러 본문이면 0이 아니라 Err(가지치기 오판 방지).
+fn wfs_total(body: &str) -> Result<u64> {
+    let v = normalize::parse_to_json(body)?;
+    if let Some(n) = v.get("totalFeatures").and_then(|x| x.as_u64()) {
+        return Ok(n);
+    }
+    // ponytail: totalFeatures 미노출 컬렉션은 받은 건수로 대체(maxFeatures=1이라 leaf로 수렴).
+    Ok(wfs_features(body)?.len() as u64)
+}
+
+/// 피처 중복 제거 키 — properties+geometry 내용 해시. 격자 경계로 중복 수신된 **동일 피처**만 합치고,
+/// 같은 pnu의 다른 피처(건물 여러 동·연도별 행)는 보존한다. GeoServer `id`는 PK 없는 레이어에서
+/// 요청마다 달라질 수 있어 쓰지 않는다.
+fn feature_key(f: &Value) -> String {
+    let content = serde_json::json!([f.get("properties"), f.get("geometry")]).to_string();
+    crate::update::sha256_hex(content.as_bytes())
+}
+
 /// bbox 5토큰 문자열을 WFS에 조회해 `totalFeatures` 반환.
 /// maxFeatures=1 카운트 프로브 — 실제 건수는 cap과 무관하게 totalFeatures에 노출됨(스파이크 확인).
 async fn wfs_count_bbox(
@@ -1854,8 +1894,7 @@ async fn wfs_count_bbox(
     params.push(("srsName".into(), crs.to_string()));
     params.push(("maxFeatures".into(), "1".into()));
     let body = resilient_get_text(client, &url, params, auth).await?;
-    let v = normalize::parse_to_json(&body)?;
-    Ok(v.get("totalFeatures").and_then(|x| x.as_u64()).unwrap_or(0))
+    wfs_total(&body)
 }
 
 /// 중심(x, y) + 반경(미터) + crs → WFS bbox 5토큰 문자열.
@@ -2026,13 +2065,7 @@ async fn harvest_wfs_bbox(
                 params.push(("srsName".into(), crs.clone()));
                 params.push(("maxFeatures".into(), CAP.to_string()));
                 let body = resilient_get_text(&client, &url, params, &auth).await?;
-                let v = normalize::parse_to_json(&body)?;
-                let feats: Vec<Value> = v
-                    .get("features")
-                    .and_then(|f| f.as_array())
-                    .cloned()
-                    .unwrap_or_default();
-                Ok::<Vec<Value>, anyhow::Error>(feats)
+                wfs_features(&body)
             }
         },
     )
@@ -2041,31 +2074,27 @@ async fn harvest_wfs_bbox(
     // 병합 + PNU dedup
     let mut by_pnu: std::collections::BTreeMap<String, Value> =
         std::collections::BTreeMap::new();
+    let mut failed: Vec<String> = Vec::new();
     for (slot, r) in results.into_iter().enumerate() {
         match r {
             Ok(feats) => {
                 for f in feats {
-                    let pnu = f
-                        .get("properties")
-                        .and_then(|p| p.get("pnu"))
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let key = if pnu.is_empty() {
-                        f.get("id")
-                            .and_then(|x| x.as_str())
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| format!("_{}", by_pnu.len()))
-                    } else {
-                        pnu
-                    };
+                    // 격자 경계에 걸친 피처는 여러 칸에서 중복 수신 → 첫 건 유지.
+                    let key = feature_key(&f);
                     by_pnu.entry(key).or_insert(f);
                 }
             }
-            Err(e) => {
-                eprintln!("[경고] leaf fetch 실패(slot {slot}): {e}");
-            }
+            Err(e) => failed.push(format!("slot {slot}: {e}")),
         }
+    }
+    // 실패 칸을 경고만 하고 넘기면 DXF/SHP가 구멍 난 채 ok:true로 생성됨.
+    if !failed.is_empty() {
+        return Err(anyhow!(
+            "격자 leaf 수집 실패 {}/{}칸 — 첫 실패: {}",
+            failed.len(),
+            total_cells,
+            failed[0]
+        ));
     }
 
     Ok((by_pnu.into_values().collect(), total_cells, max_depth))
@@ -2076,8 +2105,7 @@ async fn wfs_count(client: &Client, endpoint_op: &str, pnu: &str, auth: &Auth) -
     let (url, mut params) = NedBuilder::new(NedKind::Wfs, endpoint_op).set("pnu", pnu).build();
     params.push(("maxFeatures".into(), "1".into()));
     let body = resilient_get_text(client, &url, params, auth).await?;
-    let v = normalize::parse_to_json(&body)?;
-    Ok(v.get("totalFeatures").and_then(|x| x.as_u64()).unwrap_or(0))
+    wfs_total(&body)
 }
 
 /// WFS 전수 수집 — PNU 접두를 1000 이하 조각으로 적응 분할(무효 접두는 count 0으로 가지치기).
@@ -2098,6 +2126,7 @@ async fn harvest_wfs_all(
     let mut leaves: Vec<String> = Vec::new();
     let mut frontier: Vec<String> = vec![prefix.to_string()];
     let mut depth = 0u32;
+    let mut last_err: Option<anyhow::Error> = None;
     while !frontier.is_empty() && depth < 16 {
         let op = endpoint_op.to_string();
         let client2 = client.clone();
@@ -2128,11 +2157,22 @@ async fn harvest_wfs_all(
                     }
                 }
                 // 프로브 에러(서버 일시 장애 등): 해당 접두를 다음 라운드로 재투입.
-                Err(_) => next.push(frontier[slot].clone()),
+                Err(e) => {
+                    next.push(frontier[slot].clone());
+                    last_err = Some(e);
+                }
             }
         }
         frontier = next;
         depth += 1;
+    }
+    // 남은 접두를 버리면 부분 결과가 ok:true로 나감 — 실패로 보고.
+    if !frontier.is_empty() {
+        return Err(anyhow!(
+            "WFS 접두 분할 미완료({}개 남음): {}",
+            frontier.len(),
+            last_err.map(|e| e.to_string()).unwrap_or_else(|| "깊이 한도 초과".into())
+        ));
     }
 
     // 2) leaf 전수 fetch(키풀 병렬), PNU 기준 dedup. 에러 leaf는 재시도 라운드.
@@ -2156,13 +2196,7 @@ async fn harvest_wfs_all(
                     params.push((k.clone(), v.clone()));
                 }
                 let body = resilient_get_text(&client, &url, params, &auth).await?;
-                let v = normalize::parse_to_json(&body)?;
-                let feats: Vec<Value> = v
-                    .get("features")
-                    .and_then(|f| f.as_array())
-                    .cloned()
-                    .unwrap_or_default();
-                Ok::<Vec<Value>, anyhow::Error>(feats)
+                wfs_features(&body)
             }
         })
         .await;
@@ -2172,25 +2206,25 @@ async fn harvest_wfs_all(
             match r {
                 Ok(feats) => {
                     for f in feats {
-                        let pnu = f
-                            .get("properties")
-                            .and_then(|p| p.get("pnu"))
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let key = if pnu.is_empty() {
-                            format!("_{}", by_pnu.len())
-                        } else {
-                            pnu
-                        };
+                        let key = feature_key(&f);
                         by_pnu.insert(key, f);
                     }
                 }
-                Err(_) => failed.push(pending[slot].clone()),
+                Err(e) => {
+                    failed.push(pending[slot].clone());
+                    last_err = Some(e);
+                }
             }
         }
         pending = failed;
         round += 1;
+    }
+    if !pending.is_empty() {
+        return Err(anyhow!(
+            "WFS leaf 수집 실패({}개): {}",
+            pending.len(),
+            last_err.map(|e| e.to_string()).unwrap_or_default()
+        ));
     }
     Ok(by_pnu.into_values().collect())
 }
@@ -2342,9 +2376,13 @@ pub async fn run_wfs(g: &GlobalArgs, a: WfsArgs) -> Result<()> {
     // HTML 뷰어 출력: GeoJSON을 토스 디자인 2D 지도에 오버레이.
     if let Some(path) = &a.output {
         let body = client.get_text(&url, params, pick_auth(&auths)).await?;
+        // 에러 본문(ServiceException·키 만료)이면 빈 지도 HTML을 ok:true로 내지 않고 실패.
+        wfs_features(&body)?;
+        // 검증된 JSON을 재직렬화해 주입 — 렌더러는 유효 JSON만 받는다.
+        let json = serde_json::to_string(&normalize::parse_to_json(&body)?)?;
         let key = &pick_auth(&auths).key;
         let domain = pick_auth(&auths).domain.clone().unwrap_or_default();
-        let html = super::embed_cmds::render_wfs_viewer(&body, a.bbox.as_deref(), key, &domain);
+        let html = super::embed_cmds::render_wfs_viewer(&json, a.bbox.as_deref(), key, &domain);
         let saved = output::save_bytes(path, html.as_bytes())?;
         return output::print_json(g, &serde_json::json!({"ok": true, "saved": saved}));
     }
@@ -2540,4 +2578,30 @@ where
         .collect();
 
     output::print_json(g, &serde_json::json!({"ok": true, "count": items.len(), "items": items}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EXC: &str = r#"<?xml version="1.0" encoding="UTF-8" ?><ServiceExceptionReport version="1.1.0"><ServiceException code="EXPIRE_KEY">인증키가 만료되었습니다.</ServiceException></ServiceExceptionReport>"#;
+
+    #[test]
+    fn wfs_error_bodies_are_errors_not_empty() {
+        assert!(wfs_features(EXC).is_err());
+        assert!(wfs_total(EXC).is_err());
+        assert!(wfs_features(r#"{"response":{"status":"ERROR"}}"#).is_err());
+        assert!(wfs_features(r#"{"type":"FeatureCollection","features":[]}"#).unwrap().is_empty());
+        assert_eq!(wfs_total(r#"{"totalFeatures":1234,"features":[{}]}"#).unwrap(), 1234);
+        assert_eq!(wfs_total(r#"{"features":[{}]}"#).unwrap(), 1);
+    }
+
+    #[test]
+    fn feature_key_merges_identical_keeps_distinct() {
+        let a = serde_json::json!({"id":"x.1","properties":{"pnu":"1"},"geometry":{"type":"Point","coordinates":[1,2]}});
+        let a_other_fid = serde_json::json!({"id":"fid--9","properties":{"pnu":"1"},"geometry":{"type":"Point","coordinates":[1,2]}});
+        let b_same_pnu = serde_json::json!({"properties":{"pnu":"1"},"geometry":{"type":"Point","coordinates":[3,4]}});
+        assert_eq!(feature_key(&a), feature_key(&a_other_fid));
+        assert_ne!(feature_key(&a), feature_key(&b_same_pnu));
+    }
 }

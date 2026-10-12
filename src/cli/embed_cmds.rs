@@ -813,8 +813,9 @@ map.on('pointermove', function(evt){
 /// WFS GeoJSON을 토스 디자인 지도(Leaflet + vworld 타일)에 오버레이하는 뷰어 HTML.
 /// vworld 2D(OpenLayers 3.10.1) 내부 접근자 불확실성을 피해 Leaflet로 구현 — GeoJSON 표준 [lon,lat] 그대로.
 pub fn render_wfs_viewer(geojson: &str, bbox: Option<&str>, key: &str, _domain: &str) -> String {
-    // GeoJSON 안전 주입(속성 문자열의 </script> 차단).
-    let safe = geojson.replace("</", "<\\/");
+    // 유효 JSON 전제: `<`는 문자열 안에만 나오므로 \u003c 치환이 안전하고,
+    // </script> 탈출과 <!--<script> 파서 상태 꼬임을 모두 막는다.
+    let safe = geojson.replace('<', "\\u003c");
     // bbox "minx,miny,maxx,maxy" → fitBounds([[miny,minx],[maxy,maxx]]).
     let fit = bbox
         .and_then(|b| {
@@ -841,6 +842,9 @@ pub fn render_wfs_viewer(geojson: &str, bbox: Option<&str>, key: &str, _domain: 
   <div id="vmap"></div>
   <div id="result"><h3>WFS 결과</h3><p id="cnt">로딩…</p></div>
   <script>
+    function escapeHtml(s) {{
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }}
     var data = {safe};
     var map = L.map('vmap');
     L.tileLayer('https://api.vworld.kr/req/wmts/1.0.0/{key}/Base/{{z}}/{{y}}/{{x}}.png',
@@ -852,7 +856,7 @@ pub fn render_wfs_viewer(geojson: &str, bbox: Option<&str>, key: &str, _domain: 
       onEachFeature: function(f, l){{
         if(f && f.properties){{
           var ks = Object.keys(f.properties).slice(0,14);
-          var rows = ks.map(function(k){{ return '<tr><td style="color:#8b95a1;padding-right:14px">'+k+'</td><td><b>'+(f.properties[k]==null?'':f.properties[k])+'</b></td></tr>'; }}).join('');
+          var rows = ks.map(function(k){{ return '<tr><td style="color:#8b95a1;padding-right:14px">'+escapeHtml(k)+'</td><td><b>'+(f.properties[k]==null?'':escapeHtml(String(f.properties[k])))+'</b></td></tr>'; }}).join('');
           l.bindPopup('<table style="font:13px Pretendard,sans-serif">'+rows+'</table>');
         }}
       }}
