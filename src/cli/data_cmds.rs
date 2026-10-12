@@ -60,7 +60,7 @@ async fn fetch_one(
 /// 주소를 입력하면 좌표로, 좌표("x,y")를 입력하면 주소로 변환한다. `--type auto`(기본)는
 /// 도로명(ROAD) 주소로 먼저 시도하고 실패하면 지번(PARCEL)으로 자동 폴백하므로 유형을 몰라도
 /// 대부분 성공한다. 입력이 "x,y"(숫자 두 개, 쉼표 구분) 형태면 `--reverse` 없이도 역지오코딩으로
-/// 자동 감지된다. 출력은 `response.result.point.{x,y}` + 정제주소(`refined`).
+/// 자동 감지된다. 출력은 `{ok,mode,type,result}` 래퍼 안 `result.response.result.point.{x,y}` + 정제주소(`refined`).
 ///
 /// 예: `vworld geocode "세종대로 110"` (주소→좌표) /
 /// `vworld geocode "126.978,37.566"` (좌표→주소, 자동 역지오) /
@@ -270,6 +270,9 @@ async fn geocoder_reverse(
     let body = client
         .get_text_apikey(&format!("{GEOCODER_HOST}/{path}"), params, key)
         .await?;
+    if body.contains("인증에 실패") {
+        return Err(anyhow!("API 키 인증 실패 — 등록된 키/도메인을 확인하세요."));
+    }
     if let Ok(v) = serde_json::from_str::<Value>(&body) {
         if let Some(s) = v[field].as_str() {
             if !s.is_empty() {
@@ -321,6 +324,12 @@ pub async fn geocode_point(g: &GlobalArgs, address: &str, crs: &str) -> Result<(
             .build();
         let body = client.get_text(&url, params, auth).await?;
         let v = normalize::parse_to_json(&body)?;
+        // 키 만료·쿼터 초과를 "주소 변환 실패"로 오안내하지 않도록.
+        if let Err(e) = normalize::check_body_error(&v) {
+            if !e.empty_ok {
+                return Err(anyhow!("{e}"));
+            }
+        }
         let point = &v["response"]["result"]["point"];
         if let (Some(lon), Some(lat)) = (point["x"].as_str(), point["y"].as_str()) {
             return Ok((lon.to_string(), lat.to_string()));
@@ -1019,10 +1028,11 @@ pub struct NedArgs {
     /// WMS 투명 배경. WMS 계열 전용(data/wfs에서는 무시).
     #[arg(long)]
     pub transparent: bool,
-    /// 좌표계(WMS/WFS 단건). 기본 EPSG:5187(동부원점 TM, 미터).
+    /// 좌표계. WMS·data·`--address`는 미지정 시 EPSG:5187(동부원점 TM, 미터).
+    /// WFS는 `srsName`으로 전송 — 미지정 시 서버 기본(EPSG:900913, 웹메르카토르).
     /// 중부원점은 EPSG:5186, 서부원점은 EPSG:5185, 위경도는 EPSG:4326.
     /// `--by-hjd`는 내부 EPSG:4326 고정이라 이 값을 무시함.
-    #[arg(long, default_value = "EPSG:5187")]
+    #[arg(long)]
     pub crs: Option<String>,
     /// `--address` 수집 결과를 Shapefile로 저장(WFS 계열 전용).
     /// .shp 경로 지정 → .shp/.shx/.dbf/.prj/.cpg 5종 생성.
@@ -1183,7 +1193,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
         let bbox = a.bbox.as_deref().ok_or_else(|| {
             anyhow!("NED WMS GetMap은 --bbox가 필요합니다(예: --bbox 37.49,126.99,37.54,127.05).")
         })?;
-        let crs = a.crs.as_deref().unwrap_or("EPSG:900913");
+        let crs = a.crs.as_deref().unwrap_or("EPSG:5187");
 
         // --param k=v 키 집합(우선순위 판단용).
         let passthrough_pairs = parse_passthrough(&a.params)?;
@@ -1273,7 +1283,8 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
     // ── 배치: PNU 목록 파일을 병렬 실행 ──
     if let Some(path) = &a.input {
         let pnus = read_lines(path)?;
-        return run_ned_batch(g, &client, &auths, op.kind, op.endpoint_op, pnus).await;
+        let extra = ned_extra_params(kind, &a)?;
+        return run_ned_batch(g, &client, &auths, op.kind, op.endpoint_op, pnus, extra).await;
     }
 
     // ── 행정동별 집계: WFS 전수 → 역지오 분류 → 통계 ──
@@ -1295,6 +1306,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
             a.hjd_grid,
             a.hjd_shp.as_deref(),
             a.hjd_db.as_deref(),
+            parse_passthrough(&a.params)?,
         )
         .await;
     }
@@ -1308,7 +1320,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
             .pnu
             .clone()
             .ok_or_else(|| anyhow!("--all은 --pnu <법정동 접두>가 필요합니다(예: 31140104)"))?;
-        let extra = parse_passthrough(&a.params)?;
+        let extra = ned_extra_params(kind, &a)?;
         let conc = g.concurrency.unwrap_or_else(|| auths.len().max(2));
         let feats = harvest_wfs_all(&client, op.endpoint_op, &prefix, &auths, conc, &extra).await?;
         return output::print_json(
@@ -1325,7 +1337,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
                 op.kind
             ));
         }
-        // --crs 기본값: EPSG:5187 (동부원점 TM, 미터). 투영계/4326 모두 지원.
+        // --address 수집 좌표계: --crs 미지정 시 EPSG:5187(동부원점 TM, 미터). 투영계/4326 모두 지원.
         let crs = a.crs.as_deref().unwrap_or("EPSG:5187");
         let (x_str, y_str) = geocode_point(g, address, crs).await?;
         let x: f64 = x_str
@@ -1342,7 +1354,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
 
         let conc = g.concurrency.unwrap_or_else(|| auths.len().max(2));
         let (feats, total_cells, max_depth) =
-            harvest_wfs_bbox(&client, op.endpoint_op, &bbox5, crs, &auths, conc).await?;
+            harvest_wfs_bbox(&client, op.endpoint_op, &bbox5, crs, &auths, conc, &parse_passthrough(&a.params)?).await?;
 
         let collected = feats.len();
 
@@ -1445,10 +1457,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
 
     let mut b = NedBuilder::new(kind, op.endpoint_op);
     b = b.opt("pnu", a.pnu.as_deref()).opt("bbox", a.bbox.as_deref());
-    if let Some(crs) = a.crs.as_deref() {
-        b = b.set("crs", crs);
-    }
-    for (k, v) in parse_passthrough(&a.params)? {
+    for (k, v) in ned_extra_params(kind, &a)? {
         b = b.set(&k, &v);
     }
     let (url, params) = b.build();
@@ -1463,6 +1472,7 @@ async fn run_ned_batch(
     kind_str: &str,
     endpoint_op: &str,
     pnus: Vec<String>,
+    extra: Vec<(String, String)>,
 ) -> Result<()> {
     let concurrency = g.concurrency.unwrap_or_else(|| auths.len().max(2));
     let kind = if kind_str == "wfs" { NedKind::Wfs } else { NedKind::Data };
@@ -1478,8 +1488,13 @@ async fn run_ned_batch(
         move |(idx, pnu), auth| {
             let client = client2.clone();
             let endpoint_op = endpoint_op.clone();
+            let extra = extra.clone();
             async move {
-                let (url, params) = NedBuilder::new(kind, &endpoint_op).set("pnu", &pnu).build();
+                let mut b = NedBuilder::new(kind, &endpoint_op).set("pnu", &pnu);
+                for (k, v) in &extra {
+                    b = b.set(k, v);
+                }
+                let (url, params) = b.build();
                 let body = client.get_text(&url, params, &auth).await?;
                 let value = if raw {
                     Value::String(body)
@@ -1505,7 +1520,8 @@ async fn run_ned_batch(
             Err(e) => serde_json::json!({"index": i, "error": e.to_string()}),
         })
         .collect();
-    output::print_json(g, &serde_json::json!({"ok": true, "count": items.len(), "items": items}))
+    let errors: Vec<String> = items.iter().filter_map(|v| v["error"].as_str().map(str::to_string)).collect();
+    finish_batch(g, serde_json::json!(items), items.len(), &errors)
 }
 
 /// 행정동별 집계 — WFS 전수 → 각 필지 역지오로 행정동 분류 → 수치필드 통계.
@@ -1524,16 +1540,23 @@ async fn run_ned_by_hjd(
     grid_decimals: u32,
     shp_path: Option<&std::path::Path>,
     db_path: Option<&std::path::Path>,
+    params: Vec<(String, String)>,
 ) -> Result<()> {
-    // ① 법정동 전수 수집(lon/lat) — 키풀 병렬 harvest.
+    // ① 법정동 전수 수집(lon/lat) — 키풀 병렬 harvest. 좌표계는 4326 고정, 나머지 --param은 전달.
     let harvest_conc = g.concurrency.unwrap_or_else(|| auths.len().max(2));
+    let mut extra = vec![("srsName".to_string(), "EPSG:4326".to_string())];
+    extra.extend(
+        params
+            .into_iter()
+            .filter(|(k, _)| !k.eq_ignore_ascii_case("srsName") && !k.eq_ignore_ascii_case("crs")),
+    );
     let feats = harvest_wfs_all(
         client,
         endpoint_op,
         prefix,
         auths,
         harvest_conc,
-        &[("srsName".to_string(), "EPSG:4326".to_string())],
+        &extra,
     )
     .await?;
 
@@ -1552,6 +1575,13 @@ async fn run_ned_by_hjd(
         }
     }
     let total = points.len();
+    // 값 필드 오타·비수치면 전 필지가 no_value → "커버리지 100%"로 오인되던 경로.
+    if total == 0 && !feats.is_empty() {
+        return Err(anyhow!(
+            "--value-field '{value_field}' 값이 {}건 모두 없거나 숫자가 아닙니다 — 필드명을 확인하세요(예: ned {endpoint_op} --pnu {prefix} 로 properties 확인)",
+            feats.len()
+        ));
+    }
 
     // ★ SHP/DB 모드: 행정동경계 폴리곤으로 point-in-polygon 분류(역지오 불필요).
     if shp_path.is_some() || db_path.is_some() {
@@ -1963,6 +1993,7 @@ async fn harvest_wfs_bbox(
     crs: &str,
     auths: &[Auth],
     concurrency: usize,
+    extra: &[(String, String)],
 ) -> Result<(Vec<Value>, usize, u32)> {
     const CAP: u64 = 1000;
     const MAX_DEPTH: u32 = 8;
@@ -2049,6 +2080,7 @@ async fn harvest_wfs_bbox(
     let op = endpoint_op.to_string();
     let crs2 = crs.to_string();
     let client2 = client.clone();
+    let extra = extra.to_vec();
     let jobs: Vec<(usize, [f64; 4])> = leaves.iter().cloned().enumerate().collect();
     let results = crate::concurrency::run_jobs(
         jobs,
@@ -2058,12 +2090,14 @@ async fn harvest_wfs_bbox(
             let client = client2.clone();
             let op = op.clone();
             let crs = crs2.clone();
+            let extra = extra.clone();
             async move {
                 let bbox5 = bbox5_of(b[0], b[1], b[2], b[3], &crs);
                 let (url, mut params) = NedBuilder::new(NedKind::Wfs, &op).build();
                 params.push(("bbox".into(), bbox5));
                 params.push(("srsName".into(), crs.clone()));
                 params.push(("maxFeatures".into(), CAP.to_string()));
+                params.extend(extra.iter().filter(|(k, _)| !k.eq_ignore_ascii_case("srsName")).cloned());
                 let body = resilient_get_text(&client, &url, params, &auth).await?;
                 wfs_features(&body)
             }
@@ -2577,7 +2611,40 @@ where
         })
         .collect();
 
-    output::print_json(g, &serde_json::json!({"ok": true, "count": items.len(), "items": items}))
+    let errors: Vec<String> = items
+        .iter()
+        .filter_map(|it| it.error.as_ref().map(|e| e["message"].as_str().unwrap_or("").to_string()))
+        .collect();
+    finish_batch(g, serde_json::json!(items), items.len(), &errors)
+}
+
+/// 배치 출력 마무리 — 전부 실패면 Err(종료코드 1: 키 만료·쿼터 초과를 ok:true로 숨기지 않음),
+/// 일부 실패면 `errors` 건수와 함께 정상 출력.
+fn finish_batch(g: &GlobalArgs, items: Value, count: usize, errors: &[String]) -> Result<()> {
+    if count > 0 && errors.len() == count {
+        return Err(anyhow!("배치 {count}건 전부 실패 — 첫 에러: {}", errors[0]));
+    }
+    output::print_json(
+        g,
+        &serde_json::json!({"ok": true, "count": count, "errors": errors.len(), "items": items}),
+    )
+}
+
+/// ned 요청 부가 파라미터 — `--param` 패스스루 + 좌표계.
+/// WFS는 `srsName`(지정 시에만; 미지정이면 서버 기본 900913), 그 외는 `crs`(기본 EPSG:5187).
+fn ned_extra_params(kind: NedKind, a: &NedArgs) -> Result<Vec<(String, String)>> {
+    let mut extra = parse_passthrough(&a.params)?;
+    let has = |extra: &[(String, String)], k: &str| extra.iter().any(|(x, _)| x.eq_ignore_ascii_case(k));
+    if kind == NedKind::Wfs {
+        if let Some(c) = a.crs.as_deref() {
+            if !has(&extra, "srsName") {
+                extra.push(("srsName".into(), c.to_string()));
+            }
+        }
+    } else if !has(&extra, "crs") {
+        extra.push(("crs".into(), a.crs.clone().unwrap_or_else(|| "EPSG:5187".into())));
+    }
+    Ok(extra)
 }
 
 #[cfg(test)]
