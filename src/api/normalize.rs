@@ -64,6 +64,10 @@ fn field_after(body: &str, key: &str) -> Option<String> {
 ///
 /// "데이터 없음"(NOT_FOUND 등)은 `empty_ok=true`로 표시(배치에서 빈 결과 정상 처리).
 pub fn check_body_error(value: &Value) -> std::result::Result<(), ApiError> {
+    // OGC(WFS/WMS) 예외 보고서 — HTTP 200 XML이라 response.status가 없어 OK로 오판되던 경로.
+    if let Some((code, text)) = ogc_exception(value) {
+        return Err(ApiError { code, text, empty_ok: false });
+    }
     // VWorld REST: { "response": { "status": "OK|NOT_FOUND|ERROR", "error": {...} } }
     let resp = value.get("response").unwrap_or(value);
     let status = resp
@@ -87,6 +91,36 @@ pub fn check_body_error(value: &Value) -> std::result::Result<(), ApiError> {
             })
         }
     }
+}
+
+/// `ServiceExceptionReport/ServiceException{@code,#text}`(WFS 1.1·VWorld) 또는
+/// `ExceptionReport/Exception{@exceptionCode,ExceptionText}`(OWS·GeoServer)에서 (code, text).
+fn ogc_exception(value: &Value) -> Option<(String, String)> {
+    let first = |v: &Value| -> Value {
+        match v {
+            Value::Array(a) => a.first().cloned().unwrap_or(Value::Null),
+            other => other.clone(),
+        }
+    };
+    let str_of = |v: &Value, keys: &[&str]| -> Option<String> {
+        keys.iter().find_map(|k| v.get(*k).and_then(|x| x.as_str()).map(str::to_string))
+    };
+    let (exc, code_keys, text_keys): (Value, &[&str], &[&str]) =
+        if let Some(r) = value.get("ServiceExceptionReport") {
+            (first(r.get("ServiceException")?), &["@code"], &["#text"])
+        } else if let Some(r) = value.get("ExceptionReport") {
+            (first(r.get("Exception")?), &["@exceptionCode"], &["ExceptionText"])
+        } else {
+            return None;
+        };
+    // 속성 없는 예외는 문자열 노드 자체가 메시지.
+    let text = exc
+        .as_str()
+        .map(str::to_string)
+        .or_else(|| str_of(&exc, text_keys))
+        .unwrap_or_else(|| "OGC 예외".into());
+    let code = str_of(&exc, code_keys).unwrap_or_else(|| "OGC_EXCEPTION".into());
+    Some((code, text))
 }
 
 fn extract_error(resp: &Value) -> (String, String) {
@@ -219,6 +253,16 @@ fn local_name(qname: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ogc_exception_reports_are_errors() {
+        let svc = serde_json::json!({"ServiceExceptionReport":{"ServiceException":{"@code":"EXPIRE_KEY","#text":"인증키가 만료되었습니다."}}});
+        let e = check_body_error(&svc).unwrap_err();
+        assert_eq!((e.code.as_str(), e.empty_ok), ("EXPIRE_KEY", false));
+        let ows = serde_json::json!({"ExceptionReport":{"Exception":{"@exceptionCode":"InvalidParameterValue","ExceptionText":"Feature type :x unknown"}}});
+        assert_eq!(check_body_error(&ows).unwrap_err().code, "InvalidParameterValue");
+        assert!(check_body_error(&serde_json::json!({"type":"FeatureCollection","features":[]})).is_ok());
+    }
 
     #[test]
     fn detects_not_found_as_empty_ok() {
