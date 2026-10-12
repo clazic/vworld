@@ -26,9 +26,6 @@ jobs:
           BIN="${{ runner.temp }}/vworld-cli/vworld"
           [ -x "$BIN" ] || { echo "::error::cli 바이너리 없음: $BIN"; exit 1; }
           echo "=== cli 바이너리 실행 ==="; "$BIN" --version
-          CFG="${{ runner.temp }}/vworld-cli/app/config.toml"
-          [ -f "$CFG" ] || { echo "::error::config.toml 미생성"; exit 1; }
-          echo "config.toml 생성 확인 OK"
 
       - name: user 스킬 모드 설치 (vworld-skill.zip 다운로드·해제)
         env:
@@ -58,9 +55,6 @@ jobs:
           if (-not (Test-Path $bin)) { Write-Error "바이너리 없음: $bin"; exit 1 }
           Write-Host "=== cli 바이너리 실행 ==="
           & $bin --version
-          $cfg = Join-Path $env:LOCALAPPDATA "vworld\app\config.toml"
-          if (-not (Test-Path $cfg)) { Write-Error "config.toml 미생성: $cfg"; exit 1 }
-          Write-Host "config.toml 생성 확인 OK"
 
       - name: user 스킬 모드 설치 (vworld-skill.zip 다운로드·해제)
         shell: pwsh

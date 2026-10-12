@@ -4,18 +4,21 @@ VWorld OpenAPI(한국 공간정보: 지오코딩·검색·2D데이터·국가중
 
 ## 0. 원라이너 설치 (권장)
 
-설치 스크립트가 **Claude Code 스킬 번들 전체**(바이너리·문서·행정동 sqlite 포함)를 GitHub Releases에서 받아 스킬 경로에 배치합니다.
+설치 스크립트가 **Claude Code 스킬 번들**(바이너리·문서·참조 TSV)을 GitHub Releases에서 받아 스킬 경로에 배치합니다. 다운로드한 파일은 릴리스의 `SHA256SUMS`와 대조해 검증하며, 불일치하면 설치를 중단합니다. 행정동 경계 sqlite는 번들에 포함되지 않습니다(6절 참고).
 
 ```bash
 # macOS / Linux — 기본: user 범위(~/.claude/skills/vworld)
 curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 
 # 프로젝트(현재 디렉터리)에 설치하려면:
-VWORLD_SCOPE=project curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | VWORLD_SCOPE=project bash
 
 # Playwright MCP 까지 함께 설치(3D 분석 결과 자동추출용):
-VWORLD_PLAYWRIGHT=1 curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | VWORLD_PLAYWRIGHT=1 bash
 ```
+
+> 환경변수는 반드시 파이프 **오른쪽 `bash` 앞**에 둡니다. `VWORLD_SCOPE=project curl ... | bash` 처럼 `curl` 앞에 두면 변수가 `bash`에 전달되지 않습니다.
+> 재설치해도 스킬 폴더의 `LEARNINGS.md`(사용자가 추가한 오답노트)는 보존됩니다.
 
 ```powershell
 # Windows — 기본: user 범위(%USERPROFILE%\.claude\skills\vworld)
@@ -37,17 +40,17 @@ irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.ps1 | i
 > `cli` 범위는 스킬이 아니라 단독 CLI 바이너리만 `~/.local/bin`(Windows는 `%LOCALAPPDATA%\vworld`)에 설치합니다.
 
 ## 1. 수동 설치 (zip 직접 배치)
-zip을 풀면 `skills/` 폴더가 나옵니다.
-- **Claude Code 스킬로 사용**: `skills/` 폴더를 스킬 경로에 배치 → 자연어로 호출.
-- **단독 CLI로 사용**: `skills/app/`의 OS별 바이너리를 직접 실행.
+`vworld-skill.zip`을 풀면 `SKILL.md`·`app/`·`references/`가 **루트에 바로** 나옵니다(`skills/` 래퍼 폴더 없음).
+- **Claude Code 스킬로 사용**: 풀린 내용 전체를 `~/.claude/skills/vworld/`(또는 프로젝트의 `.claude/skills/vworld/`)에 배치 → 자연어로 호출.
+- **단독 CLI로 사용**: `app/`의 OS별 바이너리를 직접 실행.
 
 ## 2. OS별 바이너리
 | OS | 파일 | 비고 |
 |----|------|------|
 | macOS | `app/vworld-macos` | Apple Silicon + Intel universal |
-| Linux | `app/vworld-linux` | x86_64, musl 정적(의존성 없음) |
+| Linux | `app/vworld-linux` | x86_64, musl 정적 링크(glibc 등 시스템 라이브러리 의존 없음) |
 | Windows | `app/vworld-windows.exe` | x86_64 |
-| (기본) | `app/vworld` | macOS universal 사본(편의용) |
+| (기본) | `app/vworld` | macOS **arm64(Apple Silicon) 전용** 사본(편의용, universal 아님) |
 
 Unix 실행 권한: `chmod +x app/vworld-*`
 
@@ -58,7 +61,7 @@ Unix 실행 권한: `chmod +x app/vworld-*`
    ./app/vworld-macos config add-key <발급키> --alias main
    # 도메인 등록 키면:  --referer https://your-domain.com
    ```
-   → `app/config.toml`에 저장됩니다. (`config list-keys`로 확인, `config test-keys`로 유효성 점검)
+   → `~/.vworld/config.toml`(Windows: `%USERPROFILE%\.vworld\config.toml`)에 저장됩니다. 바이너리·스킬 폴더 옆이 아니므로 재설치·스킬 삭제 후에도 유지됩니다. (`config list-keys`로 확인, `config test-keys`로 유효성 점검)
 
 ## 4. 빠른 시작
 ```bash
@@ -94,8 +97,10 @@ Unix 실행 권한: `chmod +x app/vworld-*`
 자세한 내용은 `SKILL.md`의 "결과값 자동 추출" 절 참고.
 
 ## 6. 행정동별 분석
-`ned ... --by-hjd`(행정동별 분류·통계)는 행정동 경계 DB(`references/data/vworld.sqlite`, 약 132MB)를 사용합니다. **배포본에 포함**되어 있어 추가 작업 없이 바로 동작합니다.
-(경계를 직접 갱신하려면: `./app/vworld-macos hjd-db build --shp <행정동경계.shp> --db references/data/vworld.sqlite`)
+`ned ... --by-hjd`(행정동별 분류·통계)는 행정동 경계 DB(`references/data/vworld.sqlite`, 약 132MB)를 사용합니다. 이 DB는 용량 때문에 **배포본에 포함되지 않으므로**, 처음 한 번 직접 생성해야 합니다:
+```bash
+./app/vworld-macos hjd-db build --shp <행정동경계.shp> --db references/data/vworld.sqlite
+```
 
 ## 요구사항
 - 추가 런타임/의존성 없음(단일 바이너리 자기완결).

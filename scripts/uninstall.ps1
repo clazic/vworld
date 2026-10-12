@@ -2,13 +2,13 @@
 #
 # 사용법:
 #   irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/uninstall.ps1 | iex
-#     → CLI 바이너리·스킬 제거 (config 는 보존)
+#     → CLI 바이너리·스킬 제거 (%USERPROFILE%\.vworld\config.toml 인증키는 보존)
 #
 #   파라미터를 주려면 스크립트블록으로 실행:
 #     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/clazic/vworld/main/scripts/uninstall.ps1))) -Purge
 #
 # 파라미터:
-#   -Purge          config 까지 모두 제거
+#   -Purge          %USERPROFILE%\.vworld (인증키·설정) 까지 모두 제거
 #   -Dir <경로>     CLI 바이너리 설치 디렉터리 (기본 $env:LOCALAPPDATA\vworld)
 
 param(
@@ -22,7 +22,8 @@ $SkillName = "vworld"
 $BINARY_NAME = "vworld.exe"
 $DEFAULT_DIR = Join-Path $env:LOCALAPPDATA "vworld"
 $INSTALL_DIR = if ($Dir -ne "") { $Dir } else { $DEFAULT_DIR }
-$CONFIG_SUBDIR = "app"
+# 인증키·설정은 바이너리 옆이 아니라 %USERPROFILE%\.vworld\config.toml 에 저장된다.
+$CONFIG_DIR = Join-Path $env:USERPROFILE ".vworld"
 
 function Write-Info { param($msg) Write-Host "[vworld] $msg" -ForegroundColor Cyan }
 function Write-Ok   { param($msg) Write-Host "[vworld] $msg" -ForegroundColor Green }
@@ -41,19 +42,42 @@ function Remove-Target {
     }
 }
 
+# 스킬 폴더 삭제 전 LEARNINGS.md(사용자 append 오답노트) 백업 — Purge 시엔 백업하지 않음
+function Backup-Learnings {
+    param($SkillDir)
+    $src = Join-Path $SkillDir "LEARNINGS.md"
+    if (-not (Test-Path $src)) { return }
+    if ($Purge) { return }
+    try {
+        New-Item -ItemType Directory -Force -Path $CONFIG_DIR | Out-Null
+        $dest = Join-Path $CONFIG_DIR "LEARNINGS.backup.md"
+        # user·project 스킬이 모두 있을 때 서로 덮어쓰지 않도록 이미 있으면 타임스탬프 부여
+        if (Test-Path $dest) { $dest = Join-Path $CONFIG_DIR ("LEARNINGS.backup." + (Get-Date -Format "yyyyMMddHHmmss") + ".md") }
+        Copy-Item -Path $src -Destination $dest -Force
+        Write-Ok "LEARNINGS.md 백업: $dest"
+    } catch {
+        Write-Warn "LEARNINGS.md 백업 실패: $src`n  $_"
+    }
+}
+
 # 1. CLI 바이너리
 Remove-Target (Join-Path $INSTALL_DIR $BINARY_NAME) "CLI 바이너리"
 
-# 2. 스킬 (user / project) — 폴더째 삭제되어 내부 app\config.toml 도 함께 제거됨
-Remove-Target (Join-Path (Join-Path $env:USERPROFILE ".claude") (Join-Path "skills" $SkillName)) "user 스킬"
-Remove-Target (Join-Path (Join-Path (Get-Location).Path ".claude") (Join-Path "skills" $SkillName)) "project 스킬"
+# 2. 스킬 (user / project) — 삭제 전 LEARNINGS.md 백업
+$UserSkillDir = Join-Path (Join-Path $env:USERPROFILE ".claude") (Join-Path "skills" $SkillName)
+$ProjectSkillDir = Join-Path (Join-Path (Get-Location).Path ".claude") (Join-Path "skills" $SkillName)
+Backup-Learnings $UserSkillDir
+Backup-Learnings $ProjectSkillDir
+Remove-Target $UserSkillDir "user 스킬"
+Remove-Target $ProjectSkillDir "project 스킬"
 
-# 3. cli 모드 config (purge 시에만)
+# 3. 인증키·설정 %USERPROFILE%\.vworld (Purge 시에만)
 if ($Purge) {
-    Remove-Target (Join-Path (Join-Path $INSTALL_DIR $CONFIG_SUBDIR) "config.toml") "cli config"
-    Write-Info "config 까지 모두 제거했습니다 (-Purge)."
+    Remove-Target $CONFIG_DIR "인증키·설정 폴더"
+    Write-Info "인증키·설정(%USERPROFILE%\.vworld)까지 모두 제거했습니다 (-Purge)."
 } else {
-    Write-Info "cli 모드 config.toml 은 보존했습니다. 완전 삭제: uninstall.ps1 -Purge"
+    Write-Info "인증키·설정은 보존했습니다 ($(Join-Path $CONFIG_DIR 'config.toml'))."
+    Write-Info "완전 삭제: uninstall.ps1 -Purge"
 }
 
 # 4. User PATH 에서 INSTALL_DIR 제거 (vworld 전용 폴더이므로 안전)

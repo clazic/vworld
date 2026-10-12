@@ -7,10 +7,11 @@ set -euo pipefail
 #   curl -fsSL https://raw.githubusercontent.com/clazic/vworld/main/scripts/install.sh | bash
 #     → 기본: Claude Code 스킬을 user 범위(~/.claude/skills/vworld)로 설치
 #
-#   VWORLD_SCOPE=project curl -fsSL .../install.sh | bash
+#   curl -fsSL .../install.sh | VWORLD_SCOPE=project bash
 #     → 현재 디렉터리(.claude/skills/vworld)에 프로젝트 스킬로 설치
+#       (환경변수는 반드시 파이프 오른쪽 bash 앞에 둔다 — curl 앞에 두면 bash 로 전달되지 않음)
 #
-#   VWORLD_SCOPE=cli curl -fsSL .../install.sh | bash
+#   curl -fsSL .../install.sh | VWORLD_SCOPE=cli bash
 #     → 스킬이 아닌 단독 CLI 바이너리만 ~/.local/bin 에 설치(기존 동작)
 #
 # 환경변수:
@@ -39,6 +40,66 @@ _info()  { printf '\033[1;34m[vworld]\033[0m %s\n' "$*"; }
 _ok()    { printf '\033[1;32m[vworld]\033[0m %s\n' "$*"; }
 _warn()  { printf '\033[1;33m[vworld]\033[0m %s\n' "$*" >&2; }
 _err()   { printf '\033[1;31m[vworld]\033[0m 오류: %s\n' "$*" >&2; exit 1; }
+
+# ── 무결성 검증 (릴리스의 SHA256SUMS 와 대조) ────────────────────────────────
+# SHA256SUMS 형식: "<hex>  <파일명>". 다운로드 자체가 실패하면(구 릴리스) 경고 후 진행.
+SUMS_FILE=""
+SUMS_TRIED=""
+trap '[ -z "${SUMS_FILE}" ] || rm -f "${SUMS_FILE}"' EXIT
+
+_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    return 1
+  fi
+}
+
+# _verify_sha256 <로컬파일> <릴리스 자산명> — 불일치 시 return 1, 검증 불가 시 경고 후 return 0
+_verify_sha256() {
+  local file="$1" name="$2" expected actual
+  if [ -z "${SUMS_TRIED}" ]; then
+    SUMS_TRIED=1
+    local tmp
+    tmp="$(mktemp -t vworld-sums.XXXXXX)" || tmp=""
+    if [ -n "${tmp}" ] && curl -fsSL "${REL_BASE}/SHA256SUMS" -o "${tmp}" 2>/dev/null; then
+      SUMS_FILE="${tmp}"
+    else
+      [ -z "${tmp}" ] || rm -f "${tmp}"
+      _warn "SHA256SUMS 를 받지 못해 무결성 검증을 건너뜁니다 (구 릴리스일 수 있음)."
+    fi
+  fi
+  [ -n "${SUMS_FILE}" ] || return 0
+  expected="$(awk -v n="${name}" '$2 == n || $2 == "*" n { print tolower($1); exit }' "${SUMS_FILE}")"
+  if [ -z "${expected}" ]; then
+    _warn "SHA256SUMS 에 ${name} 항목이 없어 검증을 건너뜁니다."
+    return 0
+  fi
+  if ! actual="$(_sha256 "${file}")"; then
+    _warn "sha256sum/shasum 이 없어 무결성 검증을 건너뜁니다."
+    return 0
+  fi
+  actual="$(printf '%s' "${actual}" | tr 'A-F' 'a-f')"
+  if [ "${expected}" != "${actual}" ]; then
+    _warn "SHA256 불일치: ${name} (기대 ${expected} / 실제 ${actual})"
+    return 1
+  fi
+  _info "SHA256 검증 통과: ${name}"
+}
+
+# 같은 inode 에 덮어쓰면 macOS 에서 'Killed: 9' 가 나므로, 같은 디렉터리의 숨김 임시파일로
+# 복사한 뒤 mv -f 로 원자 교체한다(새 inode).
+_atomic_install() {
+  local src="$1" dest="$2" tmp
+  tmp="$(dirname "${dest}")/.$(basename "${dest}").tmp.$$"
+  if cp "${src}" "${tmp}" && chmod +x "${tmp}" && mv -f "${tmp}" "${dest}"; then
+    return 0
+  fi
+  rm -f "${tmp}"
+  return 1
+}
 
 # /dev/tty 가 실제로 사용 가능한지(존재만으로는 부족 — 비대화형은 노드는 있으나 쓰기 불가)
 _tty_usable() { { true >/dev/tty; } 2>/dev/null; }
@@ -131,8 +192,7 @@ link_cli_binary() {
   local srcbin="$1"
   [ -f "${srcbin}" ] || { _warn "CLI 등록 건너뜀 — 바이너리 없음: ${srcbin}"; return 0; }
   mkdir -p "${INSTALL_DIR}"
-  if cp -f "${srcbin}" "${INSTALL_DIR}/${BINARY_NAME}"; then
-    chmod +x "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+  if _atomic_install "${srcbin}" "${INSTALL_DIR}/${BINARY_NAME}"; then
     _ok "CLI 등록: ${INSTALL_DIR}/${BINARY_NAME} (어디서나 '${BINARY_NAME}' 실행)"
   else
     _warn "CLI 등록 실패 — 수동 복사: cp '${srcbin}' '${INSTALL_DIR}/${BINARY_NAME}'"
@@ -161,14 +221,21 @@ install_skill() {
   fi
 
   _info "스킬 번들 다운로드: ${ZIP_URL}"
-  local tmpzip tmpdir
+  local tmpzip tmpdir learn_bak
   tmpzip="$(mktemp -t vworld-skill.XXXXXX)" || _err "임시 파일 생성 실패"
   tmpdir="$(mktemp -d -t vworld-skill-d.XXXXXX)" || _err "임시 디렉터리 생성 실패"
+  learn_bak="$(mktemp -t vworld-learnings.XXXXXX)" || _err "임시 파일 생성 실패"
   # shellcheck disable=SC2064
-  trap "rm -rf '${tmpdir}' '${tmpzip}'" RETURN
+  trap "rm -rf '${tmpdir}' '${tmpzip}' '${learn_bak}'" RETURN
 
   if ! curl -fL "${ZIP_URL}" -o "${tmpzip}"; then
     _err "스킬 번들 다운로드 실패: ${ZIP_URL}\n  (Releases 자산이 게시되어 있는지 확인하세요. VWORLD_ZIP_URL 로 오버라이드 가능)"
+  fi
+  # 기본 URL(Releases 의 vworld-skill.zip)일 때만 SHA256SUMS 로 검증 (URL 오버라이드는 대상 아님)
+  if [ -z "${VWORLD_ZIP_URL:-}" ]; then
+    _verify_sha256 "${tmpzip}" "vworld-skill.zip" || _err "스킬 번들 무결성 검증 실패 — 설치를 중단합니다."
+  else
+    _warn "VWORLD_ZIP_URL 오버라이드 사용 — SHA256 검증을 건너뜁니다."
   fi
   if ! unzip -q -o "${tmpzip}" -d "${tmpdir}"; then
     _err "스킬 번들 압축 해제 실패."
@@ -179,8 +246,24 @@ install_skill() {
   local src="${tmpdir}"
   [ -d "${tmpdir}/skills" ] && src="${tmpdir}/skills"
 
+  # 재설치 시 사용자가 append 한 LEARNINGS.md(오답노트)를 덮어쓰지 않도록 백업 후 복원
+  local have_learn=""
+  if [ -f "${target}/LEARNINGS.md" ] && cp -f "${target}/LEARNINGS.md" "${learn_bak}"; then
+    have_learn=1
+  fi
+
   mkdir -p "${target}"
+  # 기존 바이너리는 지우고 새 inode 로 복사 (macOS 'Killed: 9' 방지)
+  rm -f "${target}/app/${BINARY_NAME}" "${target}/app/vworld-macos" "${target}/app/vworld-linux" 2>/dev/null || true
   cp -R "${src}/." "${target}/"
+
+  if [ -n "${have_learn}" ]; then
+    if cp -f "${learn_bak}" "${target}/LEARNINGS.md"; then
+      _info "기존 LEARNINGS.md 를 보존했습니다."
+    else
+      _warn "LEARNINGS.md 복원 실패 — 백업본: ${learn_bak}"
+    fi
+  fi
 
   # config.toml 보존: 기존 키 설정이 있으면 덮어쓰지 않음
   if [ -f "${target}/app/config.toml" ] && [ -f "${target}/app/config.toml.example" ]; then
@@ -189,7 +272,8 @@ install_skill() {
 
   # OS별 바이너리를 표준 이름(app/vworld)으로 정규화 — SKILL.md 가 app/vworld 를 호출
   if [ -f "${target}/app/${REMOTE_BINARY}" ]; then
-    cp -f "${target}/app/${REMOTE_BINARY}" "${target}/app/${BINARY_NAME}"
+    _atomic_install "${target}/app/${REMOTE_BINARY}" "${target}/app/${BINARY_NAME}" \
+      || _err "바이너리 정규화 실패: ${target}/app/${BINARY_NAME}"
   fi
 
   # 실행 권한 (Windows 에서는 무의미하므로 Unix 에서만)
@@ -220,19 +304,31 @@ install_skill() {
 install_cli() {
   mkdir -p "${INSTALL_DIR}"
 
-  local binary_path
+  local binary_path tmpbin
   binary_path="${INSTALL_DIR}/${BINARY_NAME}"
+  # 같은 디렉터리의 숨김 임시파일로 받은 뒤 mv -f 로 원자 교체 (기존 inode 덮어쓰기 방지)
+  tmpbin="${INSTALL_DIR}/.${BINARY_NAME}.tmp.$$"
 
   _info "바이너리 다운로드 중: ${REMOTE_BINARY} (Releases)"
-  if ! curl -fL "${REL_BASE}/${REMOTE_BINARY}" -o "${binary_path}"; then
+  if ! curl -fL "${REL_BASE}/${REMOTE_BINARY}" -o "${tmpbin}"; then
+    rm -f "${tmpbin}"
     _err "바이너리 다운로드 실패. Releases 자산을 확인하세요: ${REL_BASE}/${REMOTE_BINARY}"
   fi
+  if ! _verify_sha256 "${tmpbin}" "${REMOTE_BINARY}"; then
+    rm -f "${tmpbin}"
+    _err "바이너리 무결성 검증 실패 — 설치를 중단합니다."
+  fi
 
-  chmod +x "${binary_path}"
+  chmod +x "${tmpbin}"
 
   if [ "${OS}" = "Darwin" ] && command -v xattr >/dev/null 2>&1; then
-    xattr -d com.apple.quarantine "${binary_path}" 2>/dev/null || true
+    xattr -d com.apple.quarantine "${tmpbin}" 2>/dev/null || true
     _info "macOS Gatekeeper 격리 속성 제거 완료"
+  fi
+
+  if ! mv -f "${tmpbin}" "${binary_path}"; then
+    rm -f "${tmpbin}"
+    _err "바이너리 교체 실패: ${binary_path}"
   fi
 
   _ok "설치 완료: ${binary_path}"

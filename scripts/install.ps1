@@ -34,6 +34,7 @@ $REL_BASE = if ($Version -ne "") {
 } else {
     "https://github.com/$Repo/releases/latest/download"
 }
+$ZipUrlOverridden = ($ZipUrl -ne "")
 if ($ZipUrl -eq "") {
     $ZipUrl = "$REL_BASE/vworld-skill.zip"
 }
@@ -46,7 +47,44 @@ $RemoteBinary = "vworld-windows.exe"
 function Write-Info  { param($msg) Write-Host "[vworld] $msg" -ForegroundColor Cyan }
 function Write-Ok    { param($msg) Write-Host "[vworld] $msg" -ForegroundColor Green }
 function Write-Warn  { param($msg) Write-Host "[vworld] 경고: $msg" -ForegroundColor Yellow }
-function Write-Err   { param($msg) Write-Host "[vworld] 오류: $msg" -ForegroundColor Red; exit 1 }
+# `irm | iex` 로 실행하면 exit 가 사용자 PowerShell 창을 닫으므로 throw 로 중단한다.
+function Write-Err   { param($msg) Write-Host "[vworld] 오류: $msg" -ForegroundColor Red; throw "[vworld] $msg" }
+
+# ── 무결성 검증 (릴리스의 SHA256SUMS 와 대조) ─────────────────────────────────
+# SHA256SUMS 형식: "<hex>  <파일명>". 다운로드 자체가 실패하면(구 릴리스) 경고 후 진행.
+$script:SumsLoaded = $false
+$script:SumsMap = $null
+function Test-AssetSha256 {
+    param([string]$File, [string]$Name)
+    if (-not $script:SumsLoaded) {
+        $script:SumsLoaded = $true
+        $tmpSums = Join-Path $env:TEMP ("vworld-sums-" + [guid]::NewGuid().ToString())
+        try {
+            Invoke-WebRequest -Uri "$REL_BASE/SHA256SUMS" -OutFile $tmpSums -UseBasicParsing
+            $map = @{}
+            foreach ($line in (Get-Content -Path $tmpSums)) {
+                if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$') { $map[$Matches[2]] = $Matches[1].ToLower() }
+            }
+            $script:SumsMap = $map
+        } catch {
+            Write-Warn "SHA256SUMS 를 받지 못해 무결성 검증을 건너뜁니다 (구 릴리스일 수 있음)."
+        } finally {
+            if (Test-Path $tmpSums) { Remove-Item $tmpSums -Force -ErrorAction SilentlyContinue }
+        }
+    }
+    if ($null -eq $script:SumsMap) { return $true }
+    if (-not $script:SumsMap.ContainsKey($Name)) {
+        Write-Warn "SHA256SUMS 에 $Name 항목이 없어 검증을 건너뜁니다."
+        return $true
+    }
+    $actual = (Get-FileHash -Path $File -Algorithm SHA256).Hash.ToLower()
+    if ($actual -ne $script:SumsMap[$Name]) {
+        Write-Warn "SHA256 불일치: $Name (기대 $($script:SumsMap[$Name]) / 실제 $actual)"
+        return $false
+    }
+    Write-Info "SHA256 검증 통과: $Name"
+    return $true
+}
 
 # ── OS 확인 (PS6+ 에서만 $IsWindows 존재; PS5.1 은 항상 Windows) ───────────────
 if ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
@@ -152,6 +190,12 @@ function Install-Skill {
         } catch {
             Write-Err "스킬 번들 다운로드 실패: $ZipUrl`n  (Releases 자산 게시 여부를 확인하세요. -ZipUrl 로 오버라이드 가능)`n  $_"
         }
+        # 기본 URL(Releases 의 vworld-skill.zip)일 때만 SHA256SUMS 로 검증 (-ZipUrl 오버라이드는 대상 아님)
+        if ($ZipUrlOverridden) {
+            Write-Warn "-ZipUrl 오버라이드 사용 — SHA256 검증을 건너뜁니다."
+        } elseif (-not (Test-AssetSha256 -File $tmpZip -Name "vworld-skill.zip")) {
+            Write-Err "스킬 번들 무결성 검증 실패 — 설치를 중단합니다."
+        }
         New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
         Expand-Archive -Path $tmpZip -DestinationPath $tmpDir -Force
 
@@ -159,8 +203,26 @@ function Install-Skill {
         $src = $tmpDir
         if (Test-Path (Join-Path $tmpDir "skills")) { $src = Join-Path $tmpDir "skills" }
 
+        # 재설치 시 사용자가 append 한 LEARNINGS.md(오답노트)를 덮어쓰지 않도록 백업 후 복원
+        $learnPath = Join-Path $target "LEARNINGS.md"
+        $learnBak = $null
+        if (Test-Path $learnPath) {
+            $learnBak = Join-Path $env:TEMP ("vworld-learnings-" + [guid]::NewGuid().ToString())
+            Copy-Item -Path $learnPath -Destination $learnBak -Force
+        }
+
         New-Item -ItemType Directory -Force -Path $target | Out-Null
         Copy-Item -Path (Join-Path $src "*") -Destination $target -Recurse -Force
+
+        if ($learnBak) {
+            try {
+                Copy-Item -Path $learnBak -Destination $learnPath -Force
+                Write-Info "기존 LEARNINGS.md 를 보존했습니다."
+                Remove-Item $learnBak -Force -ErrorAction SilentlyContinue
+            } catch {
+                Write-Warn "LEARNINGS.md 복원 실패 — 백업본: $learnBak"
+            }
+        }
 
         # OS별 바이너리를 표준 이름(app\vworld.exe)으로 정규화
         $remote = Join-Path (Join-Path $target "app") $RemoteBinary
@@ -192,11 +254,21 @@ function Install-Cli {
     if (-not (Test-Path $INSTALL_DIR)) { New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null }
 
     $BinaryUrl = "$REL_BASE/$RemoteBinary"
+    # 임시 파일로 받아 검증한 뒤 교체 (검증 실패 시 기존 바이너리 보존)
+    $TmpBinary = Join-Path $INSTALL_DIR (".vworld.exe.tmp." + [guid]::NewGuid().ToString())
     Write-Info "바이너리 다운로드 중: $RemoteBinary (Releases)"
     try {
-        Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UseBasicParsing
-    } catch {
-        Write-Err "바이너리 다운로드 실패. Releases 자산을 확인하세요.`n  URL: $BinaryUrl`n  오류: $_"
+        try {
+            Invoke-WebRequest -Uri $BinaryUrl -OutFile $TmpBinary -UseBasicParsing
+        } catch {
+            Write-Err "바이너리 다운로드 실패. Releases 자산을 확인하세요.`n  URL: $BinaryUrl`n  오류: $_"
+        }
+        if (-not (Test-AssetSha256 -File $TmpBinary -Name $RemoteBinary)) {
+            Write-Err "바이너리 무결성 검증 실패 — 설치를 중단합니다."
+        }
+        Move-Item -Path $TmpBinary -Destination $BinaryPath -Force
+    } finally {
+        if (Test-Path $TmpBinary) { Remove-Item $TmpBinary -Force -ErrorAction SilentlyContinue }
     }
 
     Write-Info "SmartScreen 경고가 뜨면: '추가 정보' → '실행' 을 클릭하세요."
@@ -228,8 +300,9 @@ Install-PlaywrightMcp
 Write-Host ""
 try {
     & $script:SkillBin --version
+    if ($LASTEXITCODE -ne 0) { throw "종료 코드 $LASTEXITCODE" }
 } catch {
-    Write-Warn "--version 실행 실패. 경로를 확인하세요: $($script:SkillBin) --version"
+    Write-Err "--version 실행 실패 — 설치가 올바르지 않습니다. 경로를 확인하세요: $($script:SkillBin) --version`n  $_"
 }
 
 # ── 인증키 등록 (-ApiKey > 대화형 입력 > 안내) ─────────────────────────────────
@@ -240,6 +313,7 @@ if ($script:SkillBin -and $ApiKey -ne "") {
     Write-Info "-ApiKey 로 인증키 등록 중..."
     try {
         & $script:SkillBin config add-key $ApiKey --alias main | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "종료 코드 $LASTEXITCODE" }
         Write-Ok "인증키 등록 완료 (%USERPROFILE%\.vworld\config.toml)"; $registered = $true
     } catch { Write-Warn "인증키 등록 실패 — 수동: $($script:SkillBin) config add-key <KEY> --alias main" }
 } elseif ($script:SkillBin -and -not [Console]::IsInputRedirected) {
@@ -250,6 +324,7 @@ if ($script:SkillBin -and $ApiKey -ne "") {
     if ($key -ne "") {
         try {
             & $script:SkillBin config add-key $key --alias main | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "종료 코드 $LASTEXITCODE" }
             Write-Ok "인증키 등록 완료 (%USERPROFILE%\.vworld\config.toml)"; $registered = $true
         } catch { Write-Warn "인증키 등록 실패 — 수동: $($script:SkillBin) config add-key <KEY> --alias main" }
     }
