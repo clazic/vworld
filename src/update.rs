@@ -224,8 +224,9 @@ pub fn replace_binary(new_bytes: &[u8], dst: &Path) -> Result<()> {
     }
 
     #[cfg(windows)]
+    let old = dst.with_extension("old");
+    #[cfg(windows)]
     {
-        let old = dst.with_extension("old");
         let _ = std::fs::remove_file(&old);
         if dst.exists() {
             std::fs::rename(dst, &old)
@@ -235,6 +236,13 @@ pub fn replace_binary(new_bytes: &[u8], dst: &Path) -> Result<()> {
 
     if let Err(e) = std::fs::rename(&tmp, dst) {
         let _ = std::fs::remove_file(&tmp);
+        // Windows: 기존 바이너리를 .old로 옮긴 상태 — 되돌리지 않으면 실행 파일이 사라진다.
+        #[cfg(windows)]
+        {
+            if !dst.exists() {
+                let _ = std::fs::rename(&old, dst);
+            }
+        }
         return Err(anyhow!(
             "바이너리 교체 실패: {} ({e}). 권한이 부족하면 sudo 또는 install.sh 재실행이 필요합니다.",
             dst.display()
