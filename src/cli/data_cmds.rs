@@ -1873,6 +1873,10 @@ async fn resilient_get_text(
         match client.get_text(url, params.clone(), auth).await {
             Ok(b) => return Ok(b),
             Err(e) => {
+                // 429 소진은 같은 키로 더 두드리지 않고 즉시 반환 → 워커가 키 쿨다운을 건다.
+                if e.downcast_ref::<crate::concurrency::retry::RateLimited>().is_some() {
+                    return Err(e);
+                }
                 last = Some(e);
                 let ms = 400u64 * (attempt as u64 + 1);
                 tokio::time::sleep(std::time::Duration::from_millis(ms)).await;

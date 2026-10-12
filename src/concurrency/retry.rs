@@ -30,6 +30,33 @@ impl RetryPolicy {
     }
 }
 
+/// 429가 재시도 후에도 계속된 실패 — 워커가 이 에러를 보고 키를 쿨다운 후 반납한다.
+#[derive(Debug)]
+pub struct RateLimited {
+    /// 서버 `Retry-After`(초) — 없으면 None.
+    pub retry_after: Option<Duration>,
+}
+
+impl RateLimited {
+    /// 키 쿨다운 길이 — Retry-After 우선, 없으면 2초. 30초 상한(서버 이상값 방어).
+    pub fn cooldown(&self) -> Duration {
+        self.retry_after.unwrap_or(Duration::from_secs(2)).min(Duration::from_secs(30))
+    }
+}
+
+impl std::fmt::Display for RateLimited {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HTTP 429 요청 과다 — 키 쿨다운 {}초 후 재시도 대상", self.cooldown().as_secs())
+    }
+}
+
+impl std::error::Error for RateLimited {}
+
+/// `Retry-After` 헤더(초 단위 정수만; HTTP-date 형식은 None).
+pub fn parse_retry_after(v: Option<&str>) -> Option<Duration> {
+    v?.trim().parse::<u64>().ok().map(Duration::from_secs)
+}
+
 /// 분류된 요청 실패 종류.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailKind {
@@ -69,6 +96,14 @@ mod tests {
         assert_eq!(p.backoff(0), Duration::from_millis(200));
         assert_eq!(p.backoff(1), Duration::from_millis(400));
         assert_eq!(p.backoff(2), Duration::from_millis(800));
+    }
+
+    #[test]
+    fn rate_limited_cooldown_bounds() {
+        assert_eq!(parse_retry_after(Some(" 5 ")), Some(Duration::from_secs(5)));
+        assert_eq!(parse_retry_after(Some("Wed, 21 Oct 2015 07:28:00 GMT")), None);
+        assert_eq!(RateLimited { retry_after: None }.cooldown(), Duration::from_secs(2));
+        assert_eq!(RateLimited { retry_after: Some(Duration::from_secs(999)) }.cooldown(), Duration::from_secs(30));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! 작업 큐 + 워커 — 인덱스 슬롯 결과 수집(순서 보존), 키 풀 borrow/return(설계 §3·§5.1).
 
 use super::key_pool::KeyPool;
+use super::retry::RateLimited;
 use crate::api::Auth;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
@@ -57,13 +58,19 @@ where
         handles.push(tokio::spawn(async move {
             while let Ok((idx, job)) = job_rx.recv().await {
                 // 작업 1건마다 새 lease 획득(루프 밖 1회 획득 금지).
-                let lease = match pool.acquire().await {
+                let mut lease = match pool.acquire().await {
                     Some(l) => l,
                     None => break,
                 };
                 let auth = keys[lease.idx % keys.len()].clone();
                 let result = fetch(job, auth).await;
-                // lease는 여기서 drop → 토큰 반납.
+                // 429 소진이면 이 키를 쿨다운 후 반납 — 즉시 반납하면 같은 키를 다른 워커가 바로 연타한다.
+                if let Err(e) = &result {
+                    if let Some(rl) = e.chain().find_map(|c| c.downcast_ref::<RateLimited>()) {
+                        lease.set_cooldown(rl.cooldown());
+                    }
+                }
+                // lease는 여기서 drop → 토큰 반납(쿨다운이면 지연 반납).
                 drop(lease);
                 slots.lock().unwrap()[idx] = Some(result);
             }

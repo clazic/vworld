@@ -2,7 +2,7 @@
 
 pub mod normalize;
 
-use crate::concurrency::retry::{classify_reqwest, RetryPolicy};
+use crate::concurrency::retry::{classify_reqwest, parse_retry_after, RateLimited, RetryPolicy};
 use crate::concurrency::FailKind;
 use anyhow::{anyhow, Result};
 use std::time::Duration;
@@ -263,10 +263,21 @@ impl Client {
                     if status.is_success() {
                         return Ok(resp);
                     }
+                    let retry_after = parse_retry_after(
+                        resp.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok()),
+                    );
                     if should_retry_status(status.as_u16()) && attempt < policy.max_retry {
-                        tokio::time::sleep(policy.backoff(attempt)).await;
+                        // 429는 서버 Retry-After를 존중(30초 상한), 그 외는 지수 backoff.
+                        let wait = match retry_after {
+                            Some(d) if status.as_u16() == 429 => d.min(Duration::from_secs(30)),
+                            _ => policy.backoff(attempt),
+                        };
+                        tokio::time::sleep(wait).await;
                         attempt += 1;
                         continue;
+                    }
+                    if status.as_u16() == 429 {
+                        return Err(RateLimited { retry_after }.into());
                     }
                     let body = resp.text().await.unwrap_or_default();
                     return Err(anyhow!("HTTP {status}: {}", truncate(&body, 300)));

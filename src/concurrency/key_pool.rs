@@ -45,7 +45,6 @@ pub struct KeyLease {
 
 impl KeyLease {
     /// 429 쿨다운 설정 — Drop 시 sleep 후 지연 send(동일 키 연타 방지).
-    #[allow(dead_code)] // 429 쿨다운 반납 경로용 공개 API(워커 통합 예정·§3.4).
     pub fn set_cooldown(&mut self, d: Duration) {
         self.cooldown = Some(d);
     }
