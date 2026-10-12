@@ -38,7 +38,7 @@ CLI 자체에도 **파라미터별 상세 설명**이 들어 있다 — `vworld 
 | "이 영역 지적도/공간데이터" | `vworld data <데이터셋ID> --geom-filter "BOX(minx,miny,maxx,maxy)"` (**EPSG 접미사 금지 + 면적 10km² 이내** — 넘으면 INVALID_RANGE. 예: `LP_PA_CBND_BUBUN`) |
 | "이 주소 필지의 용도지역/공시지가/건물속성" | **표준 3단계 체인**: `geocode`(좌표) → `data LP_PA_CBND_BUBUN --geom-filter "POINT(x y)"`(properties.pnu) → `ned <op> --pnu <PNU>` |
 | "건축물연령/공시지가/용도지역 등 국가중점데이터" | `vworld ned <오퍼레이션> --pnu <필지번호>` (목록: `vworld ned --list`, 변수: `--params`) |
-| "OO동 **전체 필지**의 공시지가/속성" | `vworld ned <WFS오퍼레이션> --pnu <법정동8자리> --all` (1000 cap 자동 우회) |
+| "OO동 **전체 필지**의 공시지가/속성" | `vworld ned <WFS오퍼레이션> --pnu <법정동8자리> --all` (1000 cap 자동 우회. 중복제거는 피처 내용 해시 — 건물 계열 WFS는 같은 PNU의 여러 동·연도별 행을 보존하므로 `count`는 **필지 수가 아니라 피처 수**) |
 | "OO동을 **행정동별로** 공시지가 비교" | `vworld ned getIndvdLandPriceWFS --pnu <법정동8자리> --by-hjd` (역지오 행정동 분류+통계, 자동 재처리) |
 | "여러 PNU 한꺼번에" | `vworld ned <data오퍼레이션> --input pnus.txt --concurrency 6` |
 | "여러 주소 한꺼번에" | `vworld geocode --input addrs.txt --concurrency 4` (또는 `vworld batch geocode --from addrs.txt`) |
@@ -111,12 +111,18 @@ vworld update --force          # 같은 버전 재설치(설치본 복구)
 - **data geomFilter BOX/POLYGON 면적 10km² 이내**(서버 제한): 넘으면 INVALID_RANGE("요청면적이 10km² 이내"). 넓은 영역은 분할 조회 또는 `ned <WFS> --pnu --all` 사용.
 - **data --emd-cd 단독 거부**: 일부 데이터셋(연속지적도 등)에서 INVALID_RANGE — geom/attr 필터 사용. 동 전수는 `ned <WFS> --pnu <8자리> --all`.
 - **bbox 축순서**(공식 가이드): WMS는 `EPSG:4326·5185·5186·5187·5188`일 때 `(ymin,xmin,ymax,xmax)` 위경도 반전. WFS는 `EPSG:4326`일 때만 반전, 그 외 `(xmin,ymin,xmax,ymax)`.
-- **WFS 기본 좌표계는 EPSG:900913**(Google Mercator) — srsname 미지정 시 좌표가 1.4e7대로 나오면 이것. lon/lat 원하면 `--crs EPSG:4326`(NED WFS는 `--param srsName=EPSG:4326`).
+- **WFS 서버 기본 좌표계는 EPSG:900913**(Google Mercator) — srsName 미지정 시 좌표가 1.4e7대로 나온다. `wfs` 명령은 기본 EPSG:4326을 명시 전송하므로 해당 없음. **`ned <WFS>`는 `--crs`가 기본값 없이 그대로 `srsName`으로 전송**(단건·`--all`·`--input` 공통)되므로 미지정이면 900913 — lon/lat 원하면 `--crs EPSG:4326`(`--param srsName=EPSG:4326`도 동작).
+- **OGC 예외 보고서는 에러**: `ServiceExceptionReport`/`ExceptionReport` 본문(키 만료 등)은 `{"ok":false,"error":{"message":"VWorld API 오류 [코드]: 메시지"}}` + exit 1 (`wfs`·`wms`·`ned`·`--all`·`--by-hjd`·`--address` 공통). 예전의 0건 `ok:true`가 아니다.
+- **배치(`--input`)**: 출력에 `errors`(실패 건수) 포함. 일부 실패는 `ok:true` + items의 개별 error, **전부 실패면 exit 1**("배치 N건 전부 실패 — 첫 에러: ...") → 키/쿼터 확인(`config test-keys`).
+- **`tile vector-style`**은 파일 저장(`-o` 미지정 시 `style.json`) → `{"ok":true,"saved":{...}}`. stdout 출력은 `--raw`.
 - **NED WMS 계열**은 이미지(타일/staticmap 경로). 데이터형은 WFS/속성(data) 계열.
 - **타일 좌표**: wmts/tms `--row`=Y, `--col`=X — **vector는 반대**(`--row`=X, `--col`=Y). TMS는 CLI가 Y축 반전 자동 처리.
 - **벡터 MVT 레이어**: poi(z≥15)·traffic만. `--layer Base`는 `--ext png/jpeg` 래스터 전용.
 - **catalog gid-datasets**: gid-cd 02/03은 서버 응답 제어문자로 JSON 파싱 실패 — `--raw` 우회.
 - **HTTP 200 본문 에러**: CLI가 자동 검사. "결과 없음"은 정상(빈 결과)로 처리됨.
+- **`ok:false` + `VWorld API 오류 [EXPIRE_KEY]`/`[INVALID_TYPE]`**: `config test-keys`로 키 만료·인증 확인. `[INVALID_TYPE]`은 **pnu를 8자리 이상**으로 주면 해결되는 경우가 많다. `geocoder` 역변환·`ned --address`의 주소 변환도 키 만료를 에러로 보고한다.
+- **`ned <WFS>` 좌표가 1.4e7대**: `--crs` 미지정(서버 기본 900913) → `--crs EPSG:4326`.
+- **429**: 서버 Retry-After(30초 상한) 존중, 재시도 후에도 429면 해당 키를 쿨다운 후 반납 — 대량 수집은 쿨다운 이후 재처리하므로 `--concurrency`를 낮추면 안정적.
 
 ## WMS/WFS 지원 좌표계 (공식 가이드 v4dv_wmsguide2)
 
@@ -140,10 +146,11 @@ vworld update --force          # 같은 버전 재설치(설치본 복구)
 | 명령 | 기본값 | 비고 |
 |------|--------|------|
 | `geocode` `geocoder` `search` `data` `wms` `wfs` `staticmap` | **EPSG:4326** | CLI가 명시 전송(서버 WFS 기본 900913을 덮어씀) |
-| `ned` | **EPSG:5187**(동부원점 TM, 미터) | WMS/WFS 단건·DXF/SHP 내보내기. 중부 5186 / 서부 5185 / 위경도 4326은 `--crs`로 변경 |
-| `ned --by-hjd` | EPSG:4326 내부 고정 | `--crs` 무시(경고 출력) |
+| `ned` (WMS·data 계열, `--address` 격자수집·DXF/SHP) | **EPSG:5187**(동부원점 TM, 미터) | 중부 5186 / 서부 5185 / 위경도 4326은 `--crs`로 변경 |
+| `ned` (WFS 계열 단건·`--all`·`--input`) | **기본값 없음** — `--crs`를 `srsName`으로 전송, 미지정 시 서버 기본 EPSG:900913(좌표 1.4e7대) | 위경도는 `--crs EPSG:4326`(또는 `--param srsName=EPSG:4326`) |
+| `ned --by-hjd` | EPSG:4326 내부 고정 | `--crs`를 **준 경우에만** 무시 경고 출력 |
 | `map` 계열 입력(`--center`/`--polygon`/`--route`, text `--epsg`) | EPSG:4326 (lon,lat) | JS측 `ol.proj`가 내부 변환 |
-| NED WFS 원응답(`--raw`·`--param` 직접 호출 시) | EPSG:900913 | srsName 미지정 시 서버 기본 — `--param srsName=EPSG:4326`으로 변경 |
+| NED WFS 원응답(`--raw`·`--param` 직접 호출 시) | EPSG:900913 | srsName 미지정 시 서버 기본 — `--crs EPSG:4326` 또는 `--param srsName=EPSG:4326`으로 변경 (`--param` 패스스루는 `--input`·`--by-hjd`·`--address` 격자수집에도 전달됨. 예: `--param stdrYear=2020`) |
 
 ## 통합 지오코더 (geocoder) · 자동 지오코딩 (geocode)
 
@@ -298,8 +305,9 @@ vworld ned getIndvdLandPriceWFS --pnu <법정동8자리> --by-hjd --hjd-db refer
 
 - `--hjd-db <path>`는 **경로 인자** — 자동 참조 안 됨, 반드시 명시.
 - sqlite 미사용 시: `--by-hjd`가 역지오코딩 폴백으로 동작(느리지만 정상).
-- 실측(2026-07-16): 신정동 31140104 → 11,831필지 전수, DB point-in-polygon 분류 커버리지 100%, 행정동별 `{count, hjd, stats:{mean,median,q1,q3,min,max}}` 반환.
-- 부가 서브커맨드: `hjd-db info --db`(적재 수) / `hjd-db lookup --db <동명|ADM_CD>`(경계+지역코드 조인 조회) / `hjd-db region --xlsx --db`(센서스 지역코드 적재).
+- 실측(2026-07-16): 신정동 31140104 → 11,831필지 전수, DB point-in-polygon 분류 커버리지 100%, 행정동별 `{count, hjd, stats:{mean,median,q1,q3,min,max}}` 반환. ("N필지 전수"는 지적 계열 기준 — 건물 계열 WFS는 피처 수. 역삼동 실측 3599동/3502필지, `count`=서버 totalFeatures와 일치)
+- `--by-hjd` 출력 필드: **역지오 모드**(기본) — 항목 `{hjd, hjdCode, count, stats}`(hjdCode 순), 최상위 `법정동접두`·`필드`·`전체필지`·`집계대상`·`격자수_역지오호출`·`격자정밀도_소수자릿수`·`분류됨`·`비대상_도로하천등`·`미해결에러`·`미해결격자`·`커버리지`·`행정동별`. **`--hjd-db`/`--hjd-shp` 모드** — 항목 `{hjd, count, stats}`(hjdCode 없음, **평균 내림차순**), 최상위 `방식`("… point-in-polygon")·`사용행정동폴리곤`·`분류됨`·`경계밖`·`값없음`·`커버리지`·`행정동별`. `전체필지`는 피처 수. `--value-field` 값이 전 필지에 없거나 숫자가 아니면 에러(커버리지 100%로 오인되지 않음).
+- 부가 서브커맨드: `hjd-db info --db`(적재 수) / `hjd-db lookup --db <hjd.sqlite> <동명|ADM_CD>`(경계+지역코드 조인 조회) / `hjd-db region --xlsx --db`(센서스 지역코드 적재).
 
 ## 2D 데이터레이어 탐색 워크플로
 

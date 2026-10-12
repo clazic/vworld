@@ -223,7 +223,7 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 | `data <ID>` | 2D WFS GetFeature 호출 (bbox / 속성 필터 지원) |
 | `data join` | 통계 JSON을 경계 GeoJSON에 `adm_cd`로 조인 (오프라인) |
 | `ned --list` | 국가중점데이터(NED) 115종 오퍼레이션 목록 |
-| `ned <operation>` | NED 개별 오퍼레이션 호출 (`--pnu`, `--all`, `--by-hjd`, `--input` 등) |
+| `ned <operation>` | NED 개별 오퍼레이션 호출 (`--pnu`, `--all`, `--by-hjd`, `--input` 등). WFS 계열 `--crs` 미지정 시 서버 기본 EPSG:900913 — 위경도는 `--crs EPSG:4326`. 서버 오류(OGC 예외 보고서)는 `ok:false` + exit 1 |
 | `wms` | WMS GetCapabilities / GetMap |
 | `wfs` | WFS GetFeature (bbox / typename, `-o out.html` 지정 시 HTML 뷰어로 저장) |
 | `tile wmts` | WMTS 배경지도 타일 저장 |
@@ -392,7 +392,7 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 |--------|-----------|
 | WGS84 경위도 | **EPSG:4326** (WMS 기본값) |
 | GRS80 경위도 | EPSG:4019 |
-| Google Mercator | EPSG:3857, **EPSG:900913** (WFS 기본값) |
+| Google Mercator | EPSG:3857, **EPSG:900913** (WFS 서버 기본값 — `wfs` 명령은 EPSG:4326을 명시 전송) |
 | 서부원점(GRS80) | EPSG:5180(50만), EPSG:5185 |
 | 중부원점(GRS80) | EPSG:5181(50만), EPSG:5186 |
 | 제주원점(GRS80, 55만) | EPSG:5182 |
@@ -402,7 +402,9 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 
 > **bbox 축순서 주의**: WMS는 `EPSG:4326·5185·5186·5187·5188`일 때 `(ymin,xmin,ymax,xmax)` = 위도 먼저. WFS는 `EPSG:4326`일 때만 반전.
 
-**CLI 기본 좌표계** (`--crs` 미지정 시): `geocode`·`search`·`data`·`wms`·`wfs`·`staticmap`은 **EPSG:4326**, `ned`는 **EPSG:5187**(동부원점 TM — 중부는 5186, 서부는 5185로 변경), `map` 계열 입력 좌표는 EPSG:4326(lon,lat).
+**CLI 기본 좌표계** (`--crs` 미지정 시): `geocode`·`search`·`data`·`wms`·`wfs`·`staticmap`은 **EPSG:4326**(`wfs`도 4326을 `srsName`으로 명시 전송 — 서버 자체 기본 900913과 구분), `map` 계열 입력 좌표는 EPSG:4326(lon,lat).
+
+`ned`는 계열별로 다릅니다. **WMS·data 계열과 `--address` 격자수집**은 **EPSG:5187**(동부원점 TM — 중부는 5186, 서부는 5185로 변경). **WFS 계열**(단건·`--all`·`--input`)은 `--crs`를 `srsName`으로 그대로 전송하며 **기본값이 없어** 미지정 시 서버 기본 EPSG:900913(웹메르카토르, 좌표 1.4e7대)입니다 — 위경도가 필요하면 `--crs EPSG:4326`(`--param srsName=EPSG:4326`도 동작). `ned --by-hjd`는 EPSG:4326 고정이며 `--crs`를 준 경우에만 무시 경고를 냅니다.
 
 ### 3D 분석 시뮬레이션 (49종)
 
@@ -471,6 +473,8 @@ python -m playwright install chromium
 vworld hjd-db build --shp <행정동경계.shp> --db vworld.sqlite
 vworld ned getIndvdLandPriceWFS --pnu 1168010100 --by-hjd --hjd-db vworld.sqlite
 ```
+
+> `--by-hjd` 출력은 모드별로 다릅니다. 역지오 모드는 항목 `{hjd, hjdCode, count, stats}`(+`격자수_역지오호출`·`비대상_도로하천등`·`미해결에러`), `--hjd-db`/`--hjd-shp` 모드는 항목에 hjdCode가 없고 평균 내림차순이며 `방식`·`사용행정동폴리곤`·`경계밖`·`값없음` 필드가 붙습니다. `전체필지`·`count`는 건물 계열 WFS에서 필지가 아닌 **피처 수**입니다.
 
 ---
 

@@ -66,7 +66,7 @@ vworld geocode "126.978,37.566"                     # 좌표 → 주소 (자동 
 vworld geocode --input addrs.txt --concurrency 4    # 배치
 ```
 
-- 출력: `response.result.point.{x,y}` + `refined` 정제주소.
+- 출력: 최상위 `{ok, mode, type, result}` 래퍼 안에 `result.response.result.point.{x,y}` + `refined` 정제주소(즉 전체 경로는 `result.response.result.point`).
 - **함정**: `--type` 수동 지정 시 유형 불일치(도로명↔지번)면 빈 결과. 모르면 `auto`.
 
 ## geocoder — 통합 지오코더 (apis.vworld.kr)
@@ -179,7 +179,7 @@ vworld ned [OPTIONS] [OPERATION]
 ```bash
 vworld ned --list                                   # 115 오퍼레이션 목록
 vworld ned getBuildingAge --pnu 1111018300101970001 # 단건 조회
-vworld ned getIndvdLandPriceWFS --params            # 해당 오퍼레이션의 요청변수 목록
+vworld ned getIndvdLandPriceWFS --params            # 해당 오퍼레이션의 요청변수 목록 (JSON이 아닌 사람용 텍스트 표)
 ```
 
 ### 공통·데이터 옵션
@@ -189,24 +189,24 @@ vworld ned getIndvdLandPriceWFS --params            # 해당 오퍼레이션의 
 | `--list` | 레지스트리 목록 출력 |
 | `--pnu <PNU>` | 필지고유번호(19자리). `--all`/`--by-hjd`에서는 법정동 8자리 접두 |
 | `--bbox <bbox>` | bbox (WMS/WFS) |
-| `--param k=v` | 임의 파라미터 패스스루(반복 가능). key/domain은 거부 |
-| `--params` | 요청변수 **목록 조회 전용**(값 전달 `--param`과 다름) |
-| `--input <file>` | PNU 목록 파일(줄당 1건) — 병렬 배치(data 속성 계열). `index` 순서 보존 |
-| `--crs <CRS>` | 좌표계(WMS/WFS 단건). 기본 **EPSG:5187**(동부원점). 중부 5186, 서부 5185, 위경도 4326 |
+| `--param k=v` | 임의 파라미터 패스스루(반복 가능). key/domain은 거부. 단건뿐 아니라 `--input`(배치)·`--by-hjd`·`--address`(격자 수집)에도 전달됨(예: `--param stdrYear=2020`) |
+| `--params` | 요청변수 **목록 조회 전용**(값 전달 `--param`과 다름). 출력은 JSON이 아니라 **사람용 텍스트 표** — 파싱 대상 아님 |
+| `--input <file>` | PNU 목록 파일(줄당 1건) — 병렬 배치(data 속성 계열). `index` 순서 보존. 출력 `{ok, count, errors, items}` — `errors`=실패 건수. 일부 실패는 `ok:true` + items의 개별 error, **전부 실패면 exit 1**("배치 N건 전부 실패 — 첫 에러: ..." → 키/쿼터 확인) |
+| `--crs <CRS>` | 좌표계. **WFS 계열**(단건·`--all`·`--input`)은 `srsName`으로 전송하며 **기본값 없음** — 미지정 시 서버 기본 EPSG:900913(웹메르카토르, 좌표 1.4e7대)이므로 위경도는 `--crs EPSG:4326`(`--param srsName=EPSG:4326`도 동작). **WMS·data 계열과 `--address`**는 미지정 시 EPSG:5187(동부원점). 중부 5186, 서부 5185 |
 
 ### WFS 전수 수집·집계 옵션
 
 | 옵션 | 설명 |
 |------|------|
-| `--all` | **전수 수집** — `--pnu <법정동 8자리>`(시도2+시군구3+읍면동3) 범위를 PNU 접두 적응분할로 maxFeatures 1000 cap 우회(무효 접두 가지치기·dedup) |
-| `--by-hjd` | **행정동별 집계** — 법정동 전수 수집 → 필지 대표점을 행정동으로 분류 → 수치필드 통계(평균·중앙값·Q1·Q3·최저·최고). 내부 EPSG:4326 고정(`--crs` 무시) |
+| `--all` | **전수 수집** — `--pnu <법정동 8자리>`(시도2+시군구3+읍면동3) 범위를 PNU 접두 적응분할로 maxFeatures 1000 cap 우회(무효 접두 가지치기). 중복제거는 PNU가 아니라 **피처 내용(properties+geometry) 해시** — 같은 PNU의 여러 피처(건물 여러 동·연도별 행)를 보존하므로 결과 `count`는 **피처 수**(필지 수 아님; 서버 totalFeatures와 일치. 예: 역삼동 3599동/3502필지). WFS 에러 본문(ServiceException·키 만료)이면 0건 ok가 아니라 실패(exit 1) |
+| `--by-hjd` | **행정동별 집계** — 법정동 전수 수집 → 필지 대표점을 행정동으로 분류 → 수치필드 통계(평균·중앙값·Q1·Q3·최저·최고). 내부 EPSG:4326 고정(`--crs`를 **준 경우에만** 무시 경고). `--value-field` 값이 전 필지에 없거나 숫자가 아니면 에러 |
 | `--value-field <f>` | `--by-hjd` 집계 수치 필드 (기본 `pblntf_pclnd`=개별공시지가) |
 | `--hjd-grid <N>` | 격자 분류 정밀도(좌표 소수 자릿수, 기본 3≈100m). 인접 필지를 격자로 묶어 격자당 1회만 역지오 → 호출 수십~수백 배 절감. 4≈10m(정밀·느림), 6이면 사실상 필지별 |
 | `--hjd-shp <path>` | 행정동경계 SHP(EPSG:5186, `BND_ADM_DONG_PG.shp`) point-in-polygon 분류 — 역지오 0회·즉시·정확·오프라인 |
 | `--hjd-db <path>` | `hjd-db build`로 적재한 SQLite 기반 분류 — SHP보다 빠름(권장). **경로 인자, 자동 참조 안 됨** |
 
 ```bash
-# 법정동 전체 필지 공시지가 (1000 cap 자동 우회)
+# 법정동 전체 필지(건물 계열은 피처) 공시지가 (1000 cap 자동 우회)
 vworld ned getIndvdLandPriceWFS --pnu 31140104 --all
 
 # 행정동별 집계 — 역지오 분류(인터넷 필요) 또는 DB 기반(권장)
@@ -217,7 +217,10 @@ vworld ned getIndvdLandPriceWFS --pnu 26500101 --by-hjd --hjd-db hjd.sqlite
 vworld ned getIndvdLandPriceAttr --input pnus.txt --concurrency 6
 ```
 
-- `--by-hjd`는 429 실패분 자동 재처리(동시성 자동 하향, 최대 6라운드), 502/연결끊김 재시도. 출력에 `격자수_역지오호출`·`커버리지`·`비대상_도로하천등`·`미해결에러` 포함.
+- `--by-hjd`는 429 실패분 자동 재처리(동시성 자동 하향, 최대 6라운드), 502/연결끊김 재시도. 429는 서버 Retry-After(30초 상한)를 존중하고, 재시도 후에도 429면 해당 키를 쿨다운(Retry-After 또는 2초) 후 반납 — 재시도 라운드는 쿨다운 이후 재처리.
+- `--by-hjd` 출력(모드별 상이, 공통: `법정동접두`·`필드`·`전체필지`(=피처 수)·`분류됨`·`커버리지`·`행정동별`):
+  - **역지오 모드**(기본): 항목 `{hjd, hjdCode, count, stats}`(hjdCode 순), 최상위 `집계대상`·`격자수_역지오호출`·`격자정밀도_소수자릿수`·`비대상_도로하천등`·`미해결에러`·`미해결격자`.
+  - **`--hjd-db`/`--hjd-shp` 모드**: 항목 `{hjd, count, stats}`(**hjdCode 없음**, **평균 내림차순**), 최상위 `집계대상`·`방식`("… point-in-polygon")·`사용행정동폴리곤`·`경계밖`·`값없음`.
 - sqlite/SHP 미사용 시 역지오코딩 폴백으로 정상 동작(느리지만 결과 동일).
 
 ### WMS 이미지 옵션 (WMS 계열 오퍼레이션 전용)
@@ -247,6 +250,7 @@ vworld ned getCtnlgsSpceWFS --address "남산공원길 105" --radius 500 --shp p
 ```
 
 - **함정**: NED **WMS 계열은 이미지**(타일/staticmap 경로), 데이터형은 WFS/속성(data) 계열.
+- **OGC 예외 보고서는 에러**: `ServiceExceptionReport`/`ExceptionReport` 본문은 단건 `wfs`·`wms`·`ned <WFS>`·`--all`·`--by-hjd`·`--address` 모두 `{"ok":false,"error":{"message":"VWorld API 오류 [코드]: 메시지"}}` + exit 1(예전엔 `{"ok":true,"result":{"ExceptionReport":...}}`). `geocoder` 역변환·`ned --address` 주소 변환도 키 만료·인증 실패를 에러로 보고한다.
 
 ## wms — WMS (`/req/wms`)
 
@@ -284,7 +288,7 @@ vworld wfs [OPTIONS]
 | `--bbox <bbox>` | 영역 (EPSG:4326 축반전 주의) |
 | `--pnu <PNU>` | 필지 필터 |
 | `--max-features N` | 최대 피처 수 |
-| `--crs <CRS>` | 좌표계 (기본 EPSG:4326) |
+| `--crs <CRS>` | 좌표계 (기본 EPSG:4326 — CLI가 `srsName`으로 명시 전송. 서버 자체 기본 EPSG:900913과 다름) |
 | `-o, --output <path>` | **HTML 뷰어로 저장**(토스 디자인 지도에 피처 렌더). 미지정 시 GeoJSON/JSON stdout |
 
 ```bash
@@ -366,7 +370,7 @@ vworld tile [OPTIONS] <SCHEME>       # SCHEME: wmts | tms | vector | vector-styl
 | `--z` / `--row` / `--col` | 줌 / 타일 행 / 타일 열. **wmts·tms는 row=Y, col=X — vector는 반대(row=X, col=Y)**(실측) |
 | `--ext <ext>` | 확장자 — wmts/tms 기본 png, vector 기본 pbf(래스터 벡터: png/jpeg) |
 | `--category` / `--year` / `--city` | **wmts-themes 전용** — 테마 카테고리(예: cities)/영상 연도/도시명 |
-| `-o, --output <path>` | 저장 경로 |
+| `-o, --output <path>` | 저장 경로. `vector-style`은 미지정 시 `style.json`. 전역 `--raw`면 파일 대신 stdout |
 
 ```bash
 # 서울시청 z14 = Y(row) 6449, X(col) 13969 (실측 검증 좌표)
@@ -375,7 +379,7 @@ vworld tile tms  --layer Base --z 14 --row 6449 --col 13969 -o tile.png    # 같
 vworld tile vector --layer traffic --z 14 --row 13969 --col 6449 -o t.pbf  # MVT — row=X, col=Y (축 반대!)
 vworld tile vector --layer poi --z 15 --row 27941 --col 12689 -o poi.pbf   # poi는 z≥15부터 데이터
 vworld tile vector --layer Base --z 14 --row 13969 --col 6449 --ext png -o v.png  # 래스터 벡터
-vworld tile vector-style --layer vectorStylePoi                            # 스타일 JS/JSON
+vworld tile vector-style --layer vectorStylePoi                            # 스타일 → style.json 파일 저장 → {"ok":true,"saved":{...}} (stdout 출력은 --raw)
 vworld tile wmts-themes --category cities --year 2025 --city Oslo --z 11 --row 1086 --col 596 -o oslo.png
 vworld tile wmts-capabilities -o WMTSCapabilities.xml                      # 능력문서(XML)
 ```
@@ -662,6 +666,9 @@ vworld v0.2.1 → v0.3.0 업데이트 완료
 | `legend`는 `--style` 없으면 547B "결과없음" | style은 보통 layer명과 동일 |
 | `catalog gid-datasets` 일부 gid-cd JSON 파싱 실패(서버 제어문자) | `--raw`로 우회 |
 | HTTP 200 본문 에러 | CLI가 자동 검사 — "결과 없음"은 정상(빈 결과) |
+| ok:false + `VWorld API 오류 [EXPIRE_KEY]`/`[INVALID_TYPE]` | `config test-keys`로 키 확인. pnu는 8자리 이상으로 지정 |
+| `ned <WFS>` 좌표가 1.4e7대 | `--crs` 미지정(서버 기본 900913) → `--crs EPSG:4326` |
+| 배치(`--input`) exit 1 "배치 N건 전부 실패" | 키 만료/쿼터 확인(`config test-keys`). 일부 실패는 exit 0 + `errors` 필드·items의 개별 error |
 | `--hjd-db`는 자동 참조 안 됨 | 경로를 반드시 명시 |
 | VWorld WFS maxFeatures 1000 cap, startIndex 미지원 | `ned --all`이 PNU 접두 분할로 자동 우회 |
 | `update`가 파이프·CI에서 아무것도 안 바꾸고 끝남 | 정상 동작 — stdin이 터미널이 아니면 프롬프트가 자동 "아니오". 비대화형에서 교체하려면 `--yes` |
