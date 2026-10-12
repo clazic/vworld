@@ -234,9 +234,9 @@ pub async fn run_tile(g: &GlobalArgs, a: TileArgs) -> Result<()> {
             if g.raw {
                 return output::print_raw_text(&body);
             }
-            let value: serde_json::Value =
-                serde_json::from_str(&body).unwrap_or(serde_json::Value::String(body));
-            output::print_json(g, &serde_json::json!({"ok": true, "style": value}))
+            // 도움말대로 파일 저장(-o 미지정 시 style.json). stdout은 --raw.
+            let saved = output::save_bytes(&out, body.as_bytes())?;
+            output::print_json(g, &serde_json::json!({"ok": true, "saved": saved}))
         }
         _ => {
             // key가 경로에 포함되므로 인증 미주입 fetch + 본문 에러 검사.
