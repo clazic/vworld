@@ -277,7 +277,8 @@ impl Client {
                         attempt += 1;
                         continue;
                     }
-                    return Err(e.into());
+                    // without_url: reqwest 에러 Display에 key가 담긴 URL이 포함됨 — 노출 차단.
+                    return Err(e.without_url().into());
                 }
             }
         }
@@ -287,13 +288,13 @@ impl Client {
     pub async fn get_text(&self, url: &str, params: Vec<(String, String)>, auth: &Auth) -> Result<String> {
         let params = Self::with_auth(params, auth);
         let resp = self.send_retry(url, &params, auth.domain.as_deref()).await?;
-        Ok(resp.text().await?)
+        Ok(resp.text().await.map_err(|e| e.without_url())?)
     }
 
     /// 인증 미주입 텍스트 GET — key가 경로에 포함된 타일 등에 사용.
     pub async fn get_text_plain(&self, url: &str) -> Result<String> {
         let resp = self.send_retry(url, &[], None).await?;
-        Ok(resp.text().await?)
+        Ok(resp.text().await.map_err(|e| e.without_url())?)
     }
 
     /// `apiKey=` 방식 텍스트 GET — apis.vworld.kr Geocoder 등(`key=` 아님).
@@ -305,14 +306,14 @@ impl Client {
     ) -> Result<String> {
         params.push(("apiKey".into(), key.to_string()));
         let resp = self.send_retry(url, &params, None).await?;
-        Ok(resp.text().await?)
+        Ok(resp.text().await.map_err(|e| e.without_url())?)
     }
 
     /// 바이트(이미지/타일) 응답 GET — key/domain 주입 + 재시도 + **본문 에러 검사**(§2.1.1-b).
     pub async fn get_bytes(&self, url: &str, params: Vec<(String, String)>, auth: &Auth) -> Result<Vec<u8>> {
         let params = Self::with_auth(params, auth);
         let resp = self.send_retry(url, &params, auth.domain.as_deref()).await?;
-        let bytes = resp.bytes().await?.to_vec();
+        let bytes = resp.bytes().await.map_err(|e| e.without_url())?.to_vec();
         guard_image_error(&bytes)?;
         Ok(bytes)
     }
@@ -320,7 +321,7 @@ impl Client {
     /// 인증 미주입 바이트 GET(타일 — key 경로 포함) + 본문 에러 검사.
     pub async fn get_bytes_plain(&self, url: &str) -> Result<Vec<u8>> {
         let resp = self.send_retry(url, &[], None).await?;
-        let bytes = resp.bytes().await?.to_vec();
+        let bytes = resp.bytes().await.map_err(|e| e.without_url())?.to_vec();
         guard_image_error(&bytes)?;
         Ok(bytes)
     }
@@ -353,10 +354,10 @@ fn should_retry_status(code: u16) -> bool {
 // Format::Xml은 --raw XML 원문 요청용 공개 옵션(현재 경로는 JSON 우선).
 
 fn truncate(s: &str, n: usize) -> String {
-    if s.len() <= n {
-        s.to_string()
-    } else {
-        format!("{}…", &s[..n])
+    // 문자 경계에서 자름(바이트 슬라이스는 한글 중간에서 panic).
+    match s.char_indices().nth(n) {
+        Some((i, _)) => format!("{}…", &s[..i]),
+        None => s.to_string(),
     }
 }
 
@@ -381,6 +382,12 @@ pub fn parse_passthrough(items: &[String]) -> Result<Vec<(String, String)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncate_respects_char_boundary() {
+        assert_eq!(truncate("가나다라", 2), "가나…");
+        assert_eq!(truncate("가나", 5), "가나");
+    }
 
     #[test]
     fn tms_y_flip_golden() {
