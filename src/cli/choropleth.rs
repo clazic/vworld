@@ -29,6 +29,22 @@ pub fn pick_colors(ramp: &str, n: usize) -> Vec<&'static str> {
     }).collect()
 }
 
+/// 구간별 색. 구간 수가 팔레트(7색)를 넘으면 Err — 넘긴 채 진행하면 `gen_color_fn_js`의
+/// `colors[i]`가 범위를 벗어나 panic하거나 같은 색이 반복된다.
+pub fn colors_for_breaks(ramp: &str, breaks: &[f64]) -> anyhow::Result<Vec<&'static str>> {
+    let colors = pick_colors(ramp, breaks.len() + 1);
+    if colors.len() < breaks.len() + 1 {
+        anyhow::bail!(
+            "구간 {}개가 팔레트 최대 {}색을 초과합니다 — --classes는 {} 이하, --breaks는 {}개 이하로 지정하세요",
+            breaks.len() + 1,
+            colors.len(),
+            colors.len(),
+            colors.len() - 1
+        );
+    }
+    Ok(colors)
+}
+
 /// 정수 + 천단위 콤마 포맷("311172.0" → "311,172").
 fn fmt_num(v: f64) -> String {
     let n = v.round() as i64;
@@ -196,6 +212,12 @@ mod tests {
         let js = gen_color_fn_js(&breaks, &colors, "#cccccc");
         assert!(js.contains("#cccccc"));
         assert!(js.contains("v===null"));
+    }
+
+    #[test]
+    fn test_colors_for_breaks_rejects_overflow() {
+        assert_eq!(colors_for_breaks("blues", &[1.0; 6]).unwrap().len(), 7);
+        assert!(colors_for_breaks("blues", &[1.0; 7]).is_err());
     }
 
     #[test]

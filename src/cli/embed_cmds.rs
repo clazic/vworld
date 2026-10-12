@@ -1372,7 +1372,7 @@ async fn run_extrude(g: &GlobalArgs, a: &MapArgs, key: &str, _domain: &str) -> R
     } else {
         choropleth::compute_breaks(&values, n, &a.class_method)
     };
-    let colors = choropleth::pick_colors(&a.color_scale, breaks.len() + 1);
+    let colors = choropleth::colors_for_breaks(&a.color_scale, &breaks)?;
     let color_fn_js = choropleth::gen_color_fn_js(&breaks, &colors, &a.no_data_color);
 
     // 범례
@@ -1500,7 +1500,7 @@ async fn run_choropleth(g: &GlobalArgs, a: &MapArgs, key: &str, _domain: &str) -
         choropleth::compute_breaks(&values, n, &a.class_method)
     };
 
-    let colors = choropleth::pick_colors(&a.color_scale, breaks.len() + 1);
+    let colors = choropleth::colors_for_breaks(&a.color_scale, &breaks)?;
     let color_fn_js = choropleth::gen_color_fn_js(&breaks, &colors, &a.no_data_color);
     let opacity_hover = (a.opacity + 0.15).min(1.0);
 
