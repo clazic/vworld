@@ -30,6 +30,12 @@ pub const MAX_OUTPUT: usize = 200 * 1024;
 pub const NO_KEY_MSG: &str = "VWorld API 키가 없어요. VWORLD_API_KEYS 환경변수(쉼표로 여러 개), \
 `vworld config add-key <KEY>` 설정 파일, 또는 요청의 _meta[\"kr.pes/keys\"] 로 키를 주세요.";
 
+/// 진행 보고 콜백: (지금까지, 전체, 설명). 알림 전송·묶기(1초)는 호출 쪽(MCP 전송 계층)이 맡는다.
+pub type Progress<'a> = &'a (dyn Fn(u32, u32, &str) + Send + Sync);
+
+/// 진행 보고가 필요 없을 때 넘기는 콜백.
+pub fn no_progress(_: u32, _: u32, _: &str) {}
+
 // ───────────────────────── 키 ─────────────────────────
 
 /// 기본 키의 출처(진단용 — 키 값은 담지 않는다).
@@ -625,6 +631,8 @@ pub struct DataInput {
     pub columns: Option<String>,
     pub size: Option<u32>,
     pub page: Option<u32>,
+    /// 여러 쪽 받기(1~10, 기본 1). page 부터 이어서 받아 features 를 합친다.
+    pub pages: Option<u32>,
     pub crs: String,
 }
 
@@ -658,31 +666,81 @@ pub fn validate_data(a: &DataInput) -> VResult {
     if let Some(p) = a.page {
         check_range("page", p, 1, 10000)?;
     }
+    if let Some(p) = a.pages {
+        check_range("pages", p, 1, 10)?;
+    }
     Ok(())
 }
 
 /// `/req/data` GetFeature. size 미지정 시 100(상한 1000).
-pub async fn data(client: &Client, auths: &[Auth], a: &DataInput) -> Result<Value> {
+pub async fn data(
+    client: &Client,
+    auths: &[Auth],
+    a: &DataInput,
+    progress: Progress<'_>,
+) -> Result<Value> {
     validate_data(a).map_err(|e| anyhow!(e))?;
     let size = a.size.unwrap_or(100).to_string();
-    let page = a.page.map(|p| p.to_string());
     let id = check_data_id(&a.data_id)?.data_id;
-    let (url, params) = QueryBuilder::new("data", "GetFeature")
-        .format("json")
-        .set("data", id)
-        .set("crs", &a.crs)
-        .opt("geomFilter", a.geom_filter.as_deref().map(str::trim))
-        .opt("attrFilter", a.attr_filter.as_deref())
-        .opt("emdCd", a.emd_cd.as_deref())
-        .opt("columns", a.columns.as_deref())
-        .set("size", &size)
-        .opt("page", page.as_deref())
-        .build();
-    let v = fetch_json(client, auths, url, params).await?;
-    if v.is_null() {
-        return Ok(json!({"data_id": id, "result": Value::Null, "note": "결과 없음"}));
+    let first = a.page.unwrap_or(1);
+    let want = a.pages.unwrap_or(1);
+    let mut total = want;
+    progress(0, total, "2D 데이터 조회 시작");
+    let mut merged: Option<Value> = None;
+    let mut fetched = 0u32;
+    for i in 0..want {
+        let page = (first + i).to_string();
+        let (url, params) = QueryBuilder::new("data", "GetFeature")
+            .format("json")
+            .set("data", id)
+            .set("crs", &a.crs)
+            .opt("geomFilter", a.geom_filter.as_deref().map(str::trim))
+            .opt("attrFilter", a.attr_filter.as_deref())
+            .opt("emdCd", a.emd_cd.as_deref())
+            .opt("columns", a.columns.as_deref())
+            .set("size", &size)
+            .opt("page", (a.page.is_some() || i > 0).then_some(page.as_str()))
+            .build();
+        let v = fetch_json(client, auths, url, params).await?;
+        if v.is_null() {
+            break;
+        }
+        fetched += 1;
+        let server_pages = v["response"]["page"]["total"]
+            .as_str()
+            .and_then(|t| t.parse::<u32>().ok())
+            .unwrap_or(1);
+        total = want
+            .min(server_pages.saturating_sub(first) + 1)
+            .max(fetched);
+        match merged.as_mut() {
+            None => merged = Some(v),
+            Some(m) => {
+                let more = v["response"]["result"]["featureCollection"]["features"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default();
+                if let Some(arr) =
+                    m["response"]["result"]["featureCollection"]["features"].as_array_mut()
+                {
+                    arr.extend(more);
+                }
+            }
+        }
+        progress(
+            fetched,
+            total,
+            &format!("{}/{server_pages}쪽 받음", first + i),
+        );
+        if first + i >= server_pages {
+            break;
+        }
     }
-    Ok(json!({"data_id": id, "result": v}))
+    progress(total, total, "2D 데이터 조회 완료");
+    match merged {
+        None => Ok(json!({"data_id": id, "result": Value::Null, "note": "결과 없음"})),
+        Some(v) => Ok(json!({"data_id": id, "pages_fetched": fetched, "result": v})),
+    }
 }
 
 // ───────────────────────── 도구: 용도지역(토지이용계획) ─────────────────────────
@@ -697,10 +755,14 @@ pub async fn zoning(
     address: Option<&str>,
     x: Option<f64>,
     y: Option<f64>,
+    progress: Progress<'_>,
 ) -> Result<Value> {
+    let steps = if address.is_some() { 3 } else { 2 };
+    progress(0, steps, "용도지역 조회 시작");
     let (x, y, geocoded) = match (address, x, y) {
         (Some(addr), None, None) => {
             let g = geocode(client, auths, addr, "auto", "EPSG:4326").await?;
+            progress(1, steps, "주소 → 좌표 완료");
             let px = g["point"]["x"].as_str().and_then(|s| s.parse::<f64>().ok());
             let py = g["point"]["y"].as_str().and_then(|s| s.parse::<f64>().ok());
             match (px, py) {
@@ -737,8 +799,10 @@ pub async fn zoning(
             crs: "EPSG:4326".into(),
             ..Default::default()
         },
+        &no_progress,
     )
     .await?;
+    progress(steps - 1, steps, "좌표 → 필지(PNU) 완료");
     let props =
         &parcel["result"]["response"]["result"]["featureCollection"]["features"][0]["properties"];
     let Some(pnu) = props["pnu"].as_str().map(str::to_string) else {
@@ -754,6 +818,7 @@ pub async fn zoning(
         .set("numOfRows", "100")
         .build();
     let land = fetch_json(client, auths, url, params).await?;
+    progress(steps, steps, "토지이용계획 조회 완료");
     let mut zones: Vec<Value> = Vec::new();
     collect_land_use(&land, &mut zones);
     Ok(json!({
@@ -923,8 +988,14 @@ pub fn validate_ned(a: &NedInput) -> std::result::Result<NedCall, String> {
 }
 
 /// NED data/WFS 단건 조회. WFS 는 좌표계 미지정 시 EPSG:4326(srsName), data 는 CLI 와 같이 EPSG:5187(crs).
-pub async fn ned(client: &Client, auths: &[Auth], a: &NedInput) -> Result<Value> {
+pub async fn ned(
+    client: &Client,
+    auths: &[Auth],
+    a: &NedInput,
+    progress: Progress<'_>,
+) -> Result<Value> {
     let (op, extra) = validate_ned(a).map_err(|e| anyhow!(e))?;
+    progress(0, 1, &format!("NED {} 조회 시작", op.endpoint_op));
     let kind = if op.kind == "wfs" {
         NedKind::Wfs
     } else {
@@ -946,6 +1017,7 @@ pub async fn ned(client: &Client, auths: &[Auth], a: &NedInput) -> Result<Value>
     }
     let (url, params) = b.build();
     let v = fetch_json(client, auths, url, params).await?;
+    progress(1, 1, &format!("NED {} 조회 완료", op.endpoint_op));
     if v.is_null() {
         return Ok(
             json!({"operation": op.endpoint_op, "kind": op.kind, "result": Value::Null, "note": "결과 없음"}),
@@ -1198,6 +1270,18 @@ mod tests {
             .unwrap()
             .iter()
             .any(|p| p["name"] == "key"));
+    }
+
+    #[tokio::test]
+    async fn zoning_reports_start_progress_before_work() {
+        let seen = std::sync::Mutex::new(Vec::new());
+        let rec = |p: u32, t: u32, m: &str| seen.lock().unwrap().push((p, t, m.to_string()));
+        let client = Client::new().unwrap();
+        // 범위 밖 좌표 — 네트워크 없이 검증 오류. 시작 알림은 그 전에 나간다.
+        let r = zoning(&client, &[auth(K1)], None, Some(500.0), Some(500.0), &rec).await;
+        assert!(r.is_err());
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.first().map(|s| (s.0, s.1)), Some((0, 2)));
     }
 
     #[test]

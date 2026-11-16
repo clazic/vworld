@@ -213,7 +213,7 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 
 ## MCP 서버 (`vworld-mcp`)
 
-같은 저장소의 별도 실행 파일 **`vworld-mcp`** 는 VWorld 조회를 **읽기 전용 MCP 도구**로 내놓는 stdio 서버입니다. CLI 와 같은 라이브러리 함수(HTTP 클라이언트·재시도·응답 정규화·레지스트리)를 직접 호출하며, CLI 명령과 동작은 그대로입니다. 지도 이미지·타일·StaticMap·WMS 이미지·파일 내보내기·설정 변경은 넣지 않았습니다.
+같은 저장소의 별도 실행 파일 **`vworld-mcp`** 는 VWorld 조회를 **읽기 전용 MCP 도구**로 내놓는 서버입니다. 기본은 stdio, `--http` 를 주면 단독 Streamable HTTP 서버로 뜹니다(도구 코드는 같음). CLI 와 같은 라이브러리 함수(HTTP 클라이언트·재시도·응답 정규화·레지스트리)를 직접 호출하며, CLI 명령과 동작은 그대로입니다. 지도 이미지·타일·StaticMap·WMS 이미지·파일 내보내기·설정 변경은 넣지 않았습니다.
 
 ### 설치
 
@@ -242,6 +242,8 @@ vworld-mcp --version
 |------|------|
 | `VWORLD_API_KEYS` | 기본 키. 쉼표로 여러 개(`KEY1,KEY2`) — 호출마다 돌려 쓰고 429 가 난 키는 쿨다운 동안 뒤로 미룹니다 |
 | `VWORLD_DOMAIN` | 도메인 등록 키일 때만. `domain=` 쿼리·Referer 로 붙습니다(무도메인 키는 비워 둠) |
+| `VWORLD_MCP_TOKEN` | HTTP 모드 Bearer 토큰. 있으면 `Authorization: Bearer <토큰>` 필수. loopback 이 아닌 주소에서는 없으면 시작하지 않음 |
+| `VWORLD_MCP_ALLOWED_ORIGINS` | HTTP 모드에서 받아 줄 `Origin`(쉼표, 예 `https://app.example.kr`). `http://localhost:*`·`http://127.0.0.1:*` 는 늘 허용 |
 
 `VWORLD_API_KEYS` 가 없으면 CLI 설정 파일 `~/.vworld/config.toml`(`vworld config add-key`)의 키를 씁니다. 둘 다 없어도 서버는 뜨고 `tools/list` 와 오프라인 도구(`vworld_data_layers`·`vworld_data_describe`·`vworld_ned_list`)는 동작하며, 키가 필요한 도구는 `isError: true` + "VWorld API 키가 없어요" 를 돌려줍니다.
 
@@ -254,6 +256,32 @@ vworld-mcp --version
 ```
 
 키는 인자·로그·stderr·결과·오류 어디에도 원문으로 나오지 않습니다. 응답 직전 모든 텍스트에서 그 요청의 키와 기본 키를 `***<끝4자리>` 로 바꿉니다(단위 테스트로 확인). 파일 캐시는 없습니다.
+
+### HTTP 모드 (`--http`)
+
+```bash
+vworld-mcp --http                      # 127.0.0.1:8080, 경로 /mcp
+VWORLD_MCP_TOKEN=$(openssl rand -hex 32) vworld-mcp --http 0.0.0.0:8080   # 바깥에 열 때는 토큰 필수
+```
+
+- MCP 2025-06-18 Streamable HTTP. `POST /mcp` 는 JSON-RPC 하나 또는 배치(10개까지), 본문 1MB 까지. 알림만 보낸 POST 는 202.
+- `initialize` 응답의 `Mcp-Session-Id`(256bit 무작위)를 이후 요청마다 보냅니다. 없으면 400, 모르는(끝난·1시간 미사용) 세션이면 404. `DELETE /mcp` 로 세션을 끝냅니다.
+- `Accept` 에 `text/event-stream` 이 있고 진행 알림이 나오는 요청은 SSE(알림들 → 마지막에 응답), 아니면 `application/json`.
+- `GET /mcp`(세션 머리글 + `Accept: text/event-stream`)는 서버 알림용 SSE 스트림입니다. 15초마다 keep-alive 주석.
+- `MCP-Protocol-Version` 머리글이 모르는 값이면 400.
+- 요청별 키는 `_meta["kr.pes/keys"]` 외에 **`X-Api-Keys: k1,k2`** 머리글도 됩니다(그 요청의 모든 tools/call 에 적용, 기본 키로 안 넘어감).
+- 응답·SSE 이벤트 전부 키 스크럽. 접근 기록(stderr)은 메서드·도구 이름·걸린 시간만 남깁니다.
+
+```bash
+curl -sD- -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  http://127.0.0.1:8080/mcp \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+```
+
+### 진행 알림 · 취소
+
+- 요청 `params._meta.progressToken` 이 있으면 `notifications/progress` 를 보냅니다: `vworld_zoning`(시작 → 주소→좌표 → 필지 → 토지이용계획), `vworld_data`(`pages` 로 여러 쪽 받을 때 쪽마다), `vworld_ned`(시작 · 끝). 1초 안의 알림은 묶어서 보내고, 시작과 끝은 반드시 보냅니다. 토큰이 없으면 보내지 않습니다.
+- `notifications/cancelled {requestId}` 를 받으면 진행 중인 VWorld 호출을 멈추고 그 요청에는 답하지 않습니다. HTTP 모드에서는 SSE 연결이 응답 전에 끊겨도 취소로 봅니다.
 
 ### 클라이언트 설정 (stdio)
 
@@ -271,6 +299,23 @@ command = "/path/to/vworld-mcp"
 env = { VWORLD_API_KEYS = "<KEY>" }
 ```
 
+### 클라이언트 설정 (HTTP)
+
+Claude Code:
+
+```bash
+claude mcp add --transport http vworld http://127.0.0.1:8080/mcp \
+  --header "Authorization: Bearer <VWORLD_MCP_TOKEN>"
+```
+
+Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.vworld]
+url = "http://127.0.0.1:8080/mcp"
+bearer_token_env_var = "VWORLD_MCP_TOKEN"
+```
+
 ### 도구 (모두 읽기 전용)
 
 | 도구 | 입력 | 하는 일 |
@@ -280,7 +325,7 @@ env = { VWORLD_API_KEYS = "<KEY>" }
 | `vworld_search` | `query`, `type`(PLACE·ADDRESS·DISTRICT·ROAD), `category`, `size`, `page`, `bbox`, `crs` | 장소·주소·행정구역·도로명 검색. ADDRESS·DISTRICT 는 category 필수 |
 | `vworld_data_layers` | `search`, `cat`, `geom` | 2D 데이터 레이어 158종 목록(내장, 키 불필요) |
 | `vworld_data_describe` | `data_id` | 레이어 속성표(내장, 키 불필요) |
-| `vworld_data` | `data_id`, `geom_filter`·`attr_filter`·`emd_cd` 중 하나 이상, `columns`, `size`(기본 100·상한 1000), `page`, `crs` | 2D 데이터 GetFeature. geom_filter 에 EPSG 접미사 금지, BOX/POLYGON 10km² 이내 |
+| `vworld_data` | `data_id`, `geom_filter`·`attr_filter`·`emd_cd` 중 하나 이상, `columns`, `size`(기본 100·상한 1000), `page`, `pages`(1~10, 여러 쪽 합치기), `crs` | 2D 데이터 GetFeature. geom_filter 에 EPSG 접미사 금지, BOX/POLYGON 10km² 이내 |
 | `vworld_zoning` | `address` 또는 `x`·`y`(EPSG:4326) | 지점 → 필지(PNU) → 토지이용계획(용도지역·지구) `getLandUseAttr` 요약+원응답 |
 | `vworld_ned_list` | `kind`, `search`, `operation` | 국가중점데이터 115 오퍼레이션 목록, operation 을 주면 요청변수 |
 | `vworld_ned` | `operation`(data·wfs 계열), `pnu`, `bbox`, `crs`, `params`{이름:값} | NED 단건 조회. WMS(이미지) 계열은 거부. WFS 는 기본 srsName EPSG:4326 |
@@ -289,7 +334,7 @@ env = { VWORLD_API_KEYS = "<KEY>" }
 
 ### smoke
 
-- 키 없이: `initialize` → `tools/list` 성공(도구 9개).
+- 키 없이: `initialize` → `tools/list` 성공(도구 9개). HTTP 모드도 같음(`initialize` 응답의 `Mcp-Session-Id` 를 `tools/list` 에 붙임).
 - 키 있으면: 도구 `vworld_geocode`, 인자 `{"address":"세종대로 110"}` → `isError` 없이 `point.x`·`point.y` 가 담긴 결과.
 
 ---

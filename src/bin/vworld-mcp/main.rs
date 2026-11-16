@@ -1,18 +1,23 @@
-//! vworld-mcp — VWorld OpenAPI 를 읽기 전용 도구로 내놓는 stdio MCP 서버.
+//! vworld-mcp — VWorld OpenAPI 를 읽기 전용 도구로 내놓는 MCP 서버(stdio · Streamable HTTP).
 //!
 //! 공통 규약(`<name>-mcp`): stdout 에는 JSON-RPC 만, 진단은 stderr(키 없이).
-//! 로직은 라이브러리 `vworld::mcp`(키 선택·스크럽·검증·도구 실행)에 있고, 여기는 rmcp 연결만 한다.
+//! 로직은 라이브러리 `vworld::mcp`(키 선택·스크럽·검증·도구 실행)에 있고, 여기는 rmcp 연결·
+//! 진행 알림·취소, `web` 모듈은 단독 HTTP 모드(인증·Origin·세션·SSE)를 맡는다.
+
+mod web;
 
 use rmcp::{
     handler::server::wrapper::Parameters,
-    model::{CallToolResult, ContentBlock},
+    model::{CallToolResult, ContentBlock, ProgressNotificationParam, RequestId},
     schemars,
     service::RequestContext,
     tool, tool_handler, tool_router, RoleServer, ServerHandler, ServiceExt,
 };
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use vworld::api::{Auth, Client};
 use vworld::mcp::{self, DataInput, KeySource, NedInput, SearchInput, META_KEYS};
 
@@ -124,6 +129,9 @@ struct DataArgs {
     /// 페이지 번호(1부터)
     #[schemars(range(min = 1, max = 10000))]
     page: Option<u32>,
+    /// 여러 쪽 이어 받기 1~10(기본 1). page 부터 받아 features 를 합쳐요(진행 알림 지원)
+    #[schemars(range(min = 1, max = 10))]
+    pages: Option<u32>,
     /// 응답 좌표계. 기본 EPSG:4326
     #[schemars(pattern(r"^EPSG:[0-9]{4,6}$"))]
     crs: Option<String>,
@@ -176,20 +184,117 @@ struct NedArgs {
 
 // ───────────────────────── 서버 ─────────────────────────
 
-struct State {
+pub(crate) struct State {
     client: Client,
     defaults: Vec<Auth>,
     domain: Option<String>,
 }
 
 #[derive(Clone)]
-struct Server {
+pub(crate) struct Server {
     st: Arc<State>,
     tool_router: rmcp::handler::server::router::tool::ToolRouter<Server>,
 }
 
+/// 진행 보고 콜백(도구 → 라이브러리). 보내기는 [`progress_forwarder`] 가 묶어서 한다.
+type Reporter = Arc<dyn Fn(u32, u32, &str) + Send + Sync>;
+
+/// 취소된 요청(세션|id). 그 요청의 응답은 전송 계층(stdio 필터 · HTTP 게이트)이 버린다.
+static CANCELLED: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+
+/// 취소 표시 키. stdio 는 세션이 없어 빈 문자열.
+pub(crate) fn cancel_key(session: &str, id_json: &str) -> String {
+    format!("{session}|{id_json}")
+}
+
+fn mark_cancelled(key: String) {
+    CANCELLED
+        .lock()
+        .unwrap()
+        .get_or_insert_with(HashSet::new)
+        .insert(key);
+}
+
+/// 취소된 요청이면 표시를 지우고 true(그 응답은 보내지 않는다).
+pub(crate) fn take_cancelled(key: &str) -> bool {
+    CANCELLED
+        .lock()
+        .unwrap()
+        .as_mut()
+        .is_some_and(|s| s.remove(key))
+}
+
+/// 요청의 세션 id(HTTP 모드에서 rmcp 가 넣어 준 요청 머리글). stdio 면 "".
+fn session_of(ctx: &RequestContext<RoleServer>) -> String {
+    ctx.extensions
+        .get::<::http::request::Parts>()
+        .and_then(|p| p.headers.get("mcp-session-id"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// 진행 알림 전송기: progressToken 이 있으면 (콜백, 끝날 때까지 기다릴 핸들).
+/// 1초 안에 여러 번 오면 마지막 것만 남겨 묶어 보낸다(시작은 바로, 끝은 반드시 보냄).
+fn progress_forwarder(
+    ctx: &RequestContext<RoleServer>,
+) -> (Reporter, Option<tokio::task::JoinHandle<()>>) {
+    let Some(token) = ctx.meta.get_progress_token() else {
+        return (Arc::new(mcp::no_progress), None);
+    };
+    let peer = ctx.peer.clone();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(u32, u32, String)>();
+    let handle = tokio::spawn(async move {
+        let send = |(p, t, m): (u32, u32, String)| {
+            let param = ProgressNotificationParam::new(token.clone(), p as f64)
+                .with_total(t as f64)
+                .with_message(m);
+            let peer = peer.clone();
+            async move {
+                let _ = peer.notify_progress(param).await;
+            }
+        };
+        let gap = Duration::from_secs(1);
+        let mut last: Option<Instant> = None;
+        let mut pending: Option<(u32, u32, String)> = None;
+        loop {
+            let wait = match (last, &pending) {
+                (Some(l), Some(_)) => (l + gap).saturating_duration_since(Instant::now()),
+                _ => Duration::from_secs(3600),
+            };
+            tokio::select! {
+                m = rx.recv() => match m {
+                    Some(item) => {
+                        if last.is_none_or(|l| l.elapsed() >= gap) {
+                            send(item).await;
+                            last = Some(Instant::now());
+                            pending = None;
+                        } else {
+                            pending = Some(item);
+                        }
+                    }
+                    None => break,
+                },
+                _ = tokio::time::sleep(wait), if pending.is_some() => {
+                    if let Some(item) = pending.take() {
+                        send(item).await;
+                        last = Some(Instant::now());
+                    }
+                }
+            }
+        }
+        if let Some(item) = pending {
+            send(item).await;
+        }
+    });
+    let rep: Reporter = Arc::new(move |p, t, m: &str| {
+        let _ = tx.send((p, t, m.to_string()));
+    });
+    (rep, Some(handle))
+}
+
 impl Server {
-    fn new(defaults: Vec<Auth>, domain: Option<String>) -> anyhow::Result<Self> {
+    pub(crate) fn new(defaults: Vec<Auth>, domain: Option<String>) -> anyhow::Result<Self> {
         Ok(Server {
             st: Arc::new(State {
                 client: Client::new()?,
@@ -198,6 +303,11 @@ impl Server {
             }),
             tool_router: Self::tool_router(),
         })
+    }
+
+    /// 기본 키 원문(스크럽 대상) — HTTP 계층이 응답 전체를 지울 때 쓴다.
+    pub(crate) fn default_secrets(&self) -> Vec<String> {
+        self.st.defaults.iter().map(|a| a.key.clone()).collect()
     }
 
     /// 이번 요청의 키(요청별 `_meta` 우선, 없으면 기본 키).
@@ -232,21 +342,56 @@ impl Server {
         }
     }
 
-    /// 키가 필요한 도구 공통: 키 선택 → 실행 → 마무리.
+    /// 키가 필요한 도구 공통: 키 선택 → [`Self::run`].
     async fn keyed<F, Fut>(&self, ctx: &RequestContext<RoleServer>, f: F) -> CallToolResult
     where
-        F: FnOnce(Arc<State>, Vec<Auth>) -> Fut,
+        F: FnOnce(Arc<State>, Vec<Auth>, Reporter) -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<Value>>,
     {
         let auths = match self.keys(ctx) {
             Ok(a) => a,
             Err(e) => return self.finish(&[], Err(anyhow::anyhow!(e))),
         };
+        let st = self.st.clone();
+        let used = auths.clone();
+        self.run(ctx, &used, move |rep| f(st, auths, rep)).await
+    }
+
+    /// 실행 공통: 진행 알림 연결, 취소(`notifications/cancelled` · HTTP 연결 끊김) 시 작업 중단.
+    ///
+    /// 취소되면 작업 future 를 버려 진행 중인 VWorld 호출도 멈추고, 그 요청의 응답은
+    /// 취소 표시로 전송 계층이 버린다(규격: 취소된 요청에는 답하지 않음).
+    async fn run<F, Fut>(
+        &self,
+        ctx: &RequestContext<RoleServer>,
+        used: &[Auth],
+        f: F,
+    ) -> CallToolResult
+    where
+        F: FnOnce(Reporter) -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<Value>>,
+    {
+        let (rep, forwarder) = progress_forwarder(ctx);
+        let work = f(rep);
         let r = tokio::select! {
-            r = f(self.st.clone(), auths.clone()) => r,
-            _ = ctx.ct.cancelled() => Err(anyhow::anyhow!("요청이 취소됐어요")),
+            r = work => Some(r),
+            _ = ctx.ct.cancelled() => None,
         };
-        self.finish(&auths, r)
+        if let Some(h) = forwarder {
+            if r.is_some() {
+                let _ = h.await; // 마지막 진행 알림이 응답보다 먼저 나가게.
+            } else {
+                h.abort();
+            }
+        }
+        match r {
+            Some(r) => self.finish(used, r),
+            None => {
+                let id = serde_json::to_string(&ctx.id).unwrap_or_default();
+                mark_cancelled(cancel_key(&session_of(ctx), &id));
+                self.finish(used, Err(anyhow::anyhow!("요청이 취소됐어요")))
+            }
+        }
     }
 }
 
@@ -267,7 +412,7 @@ impl Server {
     ) -> CallToolResult {
         let ty = a.r#type.unwrap_or_else(|| "auto".into());
         let crs = crs_or_4326(a.crs);
-        self.keyed(&ctx, |st, k| async move {
+        self.keyed(&ctx, |st, k, _p| async move {
             mcp::geocode(&st.client, &k, &a.address, &ty, &crs).await
         })
         .await
@@ -284,7 +429,7 @@ impl Server {
     ) -> CallToolResult {
         let ty = a.r#type.unwrap_or_else(|| "BOTH".into());
         let crs = crs_or_4326(a.crs);
-        self.keyed(&ctx, |st, k| async move {
+        self.keyed(&ctx, |st, k, _p| async move {
             mcp::reverse_geocode(&st.client, &k, a.x, a.y, &ty, &crs).await
         })
         .await
@@ -308,7 +453,7 @@ impl Server {
             bbox: a.bbox,
             crs: crs_or_4326(a.crs),
         };
-        self.keyed(&ctx, |st, k| async move {
+        self.keyed(&ctx, |st, k, _p| async move {
             mcp::search(&st.client, &k, &input).await
         })
         .await
@@ -353,10 +498,11 @@ impl Server {
             columns: a.columns,
             size: a.size,
             page: a.page,
+            pages: a.pages,
             crs: crs_or_4326(a.crs),
         };
-        self.keyed(&ctx, |st, k| async move {
-            mcp::data(&st.client, &k, &input).await
+        self.keyed(&ctx, |st, k, p| async move {
+            mcp::data(&st.client, &k, &input, &*p).await
         })
         .await
     }
@@ -370,8 +516,8 @@ impl Server {
         Parameters(a): Parameters<ZoningArgs>,
         ctx: RequestContext<RoleServer>,
     ) -> CallToolResult {
-        self.keyed(&ctx, |st, k| async move {
-            mcp::zoning(&st.client, &k, a.address.as_deref(), a.x, a.y).await
+        self.keyed(&ctx, |st, k, p| async move {
+            mcp::zoning(&st.client, &k, a.address.as_deref(), a.x, a.y, &*p).await
         })
         .await
     }
@@ -407,8 +553,8 @@ impl Server {
             crs: a.crs,
             params: a.params.unwrap_or_default(),
         };
-        self.keyed(&ctx, |st, k| async move {
-            mcp::ned(&st.client, &k, &input).await
+        self.keyed(&ctx, |st, k, p| async move {
+            mcp::ned(&st.client, &k, &input, &*p).await
         })
         .await
     }
@@ -421,35 +567,171 @@ impl Server {
 )]
 impl ServerHandler for Server {}
 
+// ───────────────────────── 시험 전용 도구 ─────────────────────────
+
+#[cfg(test)]
+pub(crate) mod test_tools {
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+
+    static ABORTED: Mutex<Option<HashSet<String>>> = Mutex::new(None);
+
+    pub(crate) fn mark(tag: &str) {
+        ABORTED
+            .lock()
+            .unwrap()
+            .get_or_insert_with(HashSet::new)
+            .insert(tag.to_string());
+    }
+
+    pub(crate) fn aborted(tag: &str) -> bool {
+        ABORTED
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|s| s.contains(tag))
+    }
+
+    /// 작업 future 가 끝나기 전에 버려지면(취소) 표시를 남긴다.
+    pub(crate) struct AbortFlag(pub String, pub bool);
+
+    impl Drop for AbortFlag {
+        fn drop(&mut self) {
+            if !self.1 {
+                mark(&self.0);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[derive(Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+struct TagArgs {
+    tag: String,
+}
+
+#[cfg(test)]
+#[tool_router(router = test_router)]
+impl Server {
+    #[tool(description = "시험용: 진행 알림 뒤 30초 잠")]
+    async fn test_sleep(
+        &self,
+        Parameters(a): Parameters<TagArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> CallToolResult {
+        self.run(&ctx, &[], |rep| async move {
+            let mut flag = test_tools::AbortFlag(a.tag, false);
+            rep(0, 2, "시작");
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            flag.1 = true;
+            Ok(serde_json::json!({"slept": true}))
+        })
+        .await
+    }
+
+    #[tool(description = "시험용: 이번 요청에 쓰일 키를 그대로 돌려줌(응답은 스크럽됨)")]
+    async fn test_keys(&self, ctx: RequestContext<RoleServer>) -> CallToolResult {
+        self.keyed(&ctx, |_st, k, _p| async move {
+            Ok(serde_json::json!({"keys": k.iter().map(|a| a.key.clone()).collect::<Vec<_>>()}))
+        })
+        .await
+    }
+}
+
+#[cfg(test)]
+impl Server {
+    pub(crate) fn with_test_tools(mut self) -> Self {
+        self.tool_router += Self::test_router();
+        self
+    }
+}
+
 // ───────────────────────── 실행 ─────────────────────────
 
-const HELP: &str = "vworld-mcp — VWorld OpenAPI 읽기 전용 MCP(stdio) 서버
+const HELP: &str = "vworld-mcp — VWorld OpenAPI 읽기 전용 MCP 서버 (stdio · Streamable HTTP)
 
-사용: vworld-mcp            (stdin/stdout 으로 MCP JSON-RPC)
+사용: vworld-mcp                 stdin/stdout 으로 MCP JSON-RPC
+      vworld-mcp --http [주소]   Streamable HTTP(경로 /mcp). 기본 127.0.0.1:8080
       vworld-mcp --version
       vworld-mcp --help
 
 환경변수:
-  VWORLD_API_KEYS   기본 키(쉼표로 여러 개). 없으면 ~/.vworld/config.toml(vworld config add-key)
-  VWORLD_DOMAIN     도메인 등록 키의 도메인(domain= 쿼리·Referer). 선택
-요청별 키: tools/call 의 params._meta[\"kr.pes/keys\"] = [\"KEY\", ...] (있으면 그 키만 사용)";
+  VWORLD_API_KEYS              기본 키(쉼표로 여러 개). 없으면 ~/.vworld/config.toml(vworld config add-key)
+  VWORLD_DOMAIN                도메인 등록 키의 도메인(domain= 쿼리·Referer). 선택
+  VWORLD_MCP_TOKEN             HTTP 모드 Bearer 토큰. loopback 이 아닌 주소에서는 필수
+  VWORLD_MCP_ALLOWED_ORIGINS   HTTP 모드에서 허용할 Origin(쉼표). loopback 출처는 늘 허용
+요청별 키: tools/call 의 params._meta[\"kr.pes/keys\"] = [\"KEY\", ...], HTTP 는 X-Api-Keys: k1,k2 머리글도 됨";
+
+/// stdio 전송 감싸개 — 취소된 요청의 응답은 내보내지 않는다(규격).
+struct CancelFilter<T>(T);
+
+impl<T> rmcp::transport::Transport<RoleServer> for CancelFilter<T>
+where
+    T: rmcp::transport::Transport<RoleServer>,
+{
+    type Error = T::Error;
+
+    fn send(
+        &mut self,
+        item: rmcp::service::TxJsonRpcMessage<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send + 'static {
+        let id: Option<&RequestId> = match &item {
+            rmcp::model::JsonRpcMessage::Response(r) => Some(&r.id),
+            rmcp::model::JsonRpcMessage::Error(e) => e.id.as_ref(),
+            _ => None,
+        };
+        let drop_it = id.is_some_and(|id| {
+            take_cancelled(&cancel_key(
+                "",
+                &serde_json::to_string(id).unwrap_or_default(),
+            ))
+        });
+        let fut = (!drop_it).then(|| self.0.send(item));
+        async move {
+            match fut {
+                Some(f) => f.await,
+                None => Ok(()),
+            }
+        }
+    }
+
+    fn receive(
+        &mut self,
+    ) -> impl std::future::Future<Output = Option<rmcp::service::RxJsonRpcMessage<RoleServer>>> + Send
+    {
+        self.0.receive()
+    }
+
+    fn close(&mut self) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send {
+        self.0.close()
+    }
+}
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
-    if let Some(arg) = std::env::args().nth(1) {
-        match arg.as_str() {
-            "--version" | "-V" => {
-                println!("vworld-mcp {VERSION}");
-                return std::process::ExitCode::SUCCESS;
-            }
-            "--help" | "-h" => {
-                println!("{HELP}");
-                return std::process::ExitCode::SUCCESS;
-            }
-            other => {
-                eprintln!("알 수 없는 인자: {other}\n\n{HELP}");
-                return std::process::ExitCode::from(2);
-            }
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut http_addr: Option<String> = None;
+    match args.first().map(String::as_str) {
+        None => {}
+        Some("--version" | "-V") => {
+            println!("vworld-mcp {VERSION}");
+            return std::process::ExitCode::SUCCESS;
+        }
+        Some("--help" | "-h") => {
+            println!("{HELP}");
+            return std::process::ExitCode::SUCCESS;
+        }
+        Some("--http") if args.len() <= 2 => {
+            http_addr = Some(
+                args.get(1)
+                    .cloned()
+                    .unwrap_or_else(|| "127.0.0.1:8080".into()),
+            );
+        }
+        Some(other) => {
+            eprintln!("알 수 없는 인자: {other}\n\n{HELP}");
+            return std::process::ExitCode::from(2);
         }
     }
     let domain = mcp::env_domain();
@@ -457,7 +739,7 @@ async fn main() -> std::process::ExitCode {
     let src = match source {
         KeySource::Env => "VWORLD_API_KEYS",
         KeySource::ConfigFile => "설정 파일",
-        KeySource::None => "없음(요청별 _meta 키만 사용 가능)",
+        KeySource::None => "없음(요청별 키만 사용 가능)",
     };
     eprintln!(
         "vworld-mcp {VERSION} — 기본 키 {}개 ({src})",
@@ -470,12 +752,24 @@ async fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
+
+    if let Some(addr) = http_addr {
+        let opts = web::Options::from_env(&addr);
+        return match web::serve(server, opts).await {
+            Ok(()) => std::process::ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("HTTP 모드 시작 실패: {e}");
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
+
     let run = async {
-        server
-            .serve(rmcp::transport::stdio())
-            .await?
-            .waiting()
-            .await?;
+        let (stdin, stdout) = rmcp::transport::stdio();
+        let transport = CancelFilter(rmcp::transport::async_rw::AsyncRwTransport::new_server(
+            stdin, stdout,
+        ));
+        server.serve(transport).await?.waiting().await?;
         Ok::<(), Box<dyn std::error::Error>>(())
     };
     match run.await {
@@ -558,5 +852,16 @@ mod tests {
             "{text}"
         );
         assert!(text.contains("***BBBB") && text.contains("***AAAA"));
+    }
+
+    #[test]
+    fn cancelled_marks_are_taken_once() {
+        mark_cancelled(cancel_key("s1", "7"));
+        assert!(
+            !take_cancelled(&cancel_key("s2", "7")),
+            "다른 세션의 같은 id 는 무관"
+        );
+        assert!(take_cancelled(&cancel_key("s1", "7")));
+        assert!(!take_cancelled(&cancel_key("s1", "7")));
     }
 }

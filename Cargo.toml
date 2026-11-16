@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [[bin]]
 name = "vworld-mcp"
-path = "src/bin/vworld-mcp.rs"
+path = "src/bin/vworld-mcp/main.rs"
 
 [lib]
 name = "vworld"
@@ -34,8 +34,17 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 calamine = "0.26"
 sha2 = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }
-# vworld-mcp(stdio MCP 서버) 전용 — 서버·매크로·stdio 전송만.
-rmcp = { version = "3.5", features = ["server", "macros", "transport-io"] }
+# vworld-mcp(MCP 서버) 전용 — stdio + Streamable HTTP(rmcp 내장 세션 관리자).
+rmcp = { version = "3.5", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
+# HTTP 모드 전용(모두 reqwest·rmcp 가 이미 쓰는 크레이트 — 새로 받는 것 없음).
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+bytes = "1"
+tower-service = "0.3"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 mockito = "1"
