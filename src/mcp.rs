@@ -1026,6 +1026,73 @@ pub async fn ned(
     Ok(json!({"operation": op.endpoint_op, "kind": op.kind, "result": v}))
 }
 
+// ───────────────────────── 큰 결과용 목록 뽑기 ─────────────────────────
+
+/// `vworld_data` 결과의 지형 목록(GeoJSON Feature) — (항목, 도형 여부).
+pub fn data_items(out: &Value) -> Option<(Vec<Value>, bool)> {
+    out.pointer("/result/response/result/featureCollection/features")
+        .and_then(Value::as_array)
+        .map(|a| (a.clone(), true))
+}
+
+/// `vworld_data` 요약(서버 전체 건수·쪽 수 등).
+pub fn data_info(out: &Value) -> Value {
+    json!({
+        "data_id": out["data_id"],
+        "pages_fetched": out["pages_fetched"],
+        "server_total": out.pointer("/result/response/record/total").cloned().unwrap_or(Value::Null),
+        "server_pages": out.pointer("/result/response/page/total").cloned().unwrap_or(Value::Null),
+    })
+}
+
+fn find_field(v: &Value) -> Option<Vec<Value>> {
+    match v {
+        Value::Object(m) => {
+            if let Some(f) = m.get("field") {
+                return match f {
+                    Value::Array(a) => Some(a.clone()),
+                    Value::Object(_) => Some(vec![f.clone()]),
+                    _ => None,
+                };
+            }
+            m.values().find_map(find_field)
+        }
+        Value::Array(a) => a.iter().find_map(find_field),
+        _ => None,
+    }
+}
+
+/// `vworld_ned` 결과의 목록: WFS 는 지형(Feature), data 계열은 `field` 행.
+pub fn ned_items(out: &Value) -> Option<(Vec<Value>, bool)> {
+    if out["kind"] == "wfs" {
+        return out
+            .pointer("/result/features")
+            .and_then(Value::as_array)
+            .map(|a| (a.clone(), true));
+    }
+    find_field(&out["result"]).map(|rows| (rows, false))
+}
+
+/// `vworld_ned` 요약.
+pub fn ned_info(out: &Value) -> Value {
+    fn find_num(v: &Value, key: &str) -> Option<Value> {
+        match v {
+            Value::Object(m) => m
+                .get(key)
+                .cloned()
+                .or_else(|| m.values().find_map(|c| find_num(c, key))),
+            _ => None,
+        }
+    }
+    json!({
+        "operation": out["operation"],
+        "kind": out["kind"],
+        "server_total": find_num(&out["result"], "totalCount")
+            .or_else(|| find_num(&out["result"], "totalFeatures"))
+            .unwrap_or(Value::Null),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1282,6 +1349,21 @@ mod tests {
         assert!(r.is_err());
         let seen = seen.lock().unwrap();
         assert_eq!(seen.first().map(|s| (s.0, s.1)), Some((0, 2)));
+    }
+
+    #[test]
+    fn list_extraction() {
+        let d = json!({"data_id": "X", "pages_fetched": 1, "result": {"response": {"record": {"total": "2"},
+            "result": {"featureCollection": {"features": [{"type": "Feature"}, {"type": "Feature"}]}}}}});
+        assert_eq!(data_items(&d).unwrap().0.len(), 2);
+        assert_eq!(data_info(&d)["server_total"], "2");
+        let n = json!({"operation": "getIndvdLandPriceAttr", "kind": "data", "result": {"indvdLandPrices":
+            {"field": [{"a": 1}, {"a": 2}], "totalCount": "24"}}});
+        let (rows, geo) = ned_items(&n).unwrap();
+        assert_eq!((rows.len(), geo), (2, false));
+        assert_eq!(ned_info(&n)["server_total"], "24");
+        let w = json!({"kind": "wfs", "result": {"features": [{"type": "Feature"}], "totalFeatures": 1}});
+        assert!(ned_items(&w).unwrap().1);
     }
 
     #[test]

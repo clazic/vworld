@@ -11,6 +11,7 @@ pub mod geomath;
 pub mod hjd_db;
 pub mod hjd_shp;
 pub mod mcp;
+pub mod mcp_results;
 pub mod ned_registry;
 pub mod output;
 pub mod shp;

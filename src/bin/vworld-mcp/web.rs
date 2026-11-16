@@ -27,6 +27,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tower_service::Service;
 use vworld::mcp;
+use vworld::mcp_results::Store;
 
 type Body = BoxBody<Bytes, Infallible>;
 
@@ -180,6 +181,7 @@ pub struct Gateway {
     origins: Vec<String>,
     defaults: Vec<String>,
     sessions: Sessions,
+    store: Store,
 }
 
 impl Gateway {
@@ -196,6 +198,7 @@ impl Gateway {
             config = config.disable_allowed_hosts();
         }
         let defaults = server.default_secrets();
+        let store = server.store();
         let factory = move || Ok(server.clone());
         Arc::new(Gateway {
             svc: StreamableHttpService::new(factory, Arc::new(manager), config),
@@ -203,7 +206,52 @@ impl Gateway {
             origins: opts.allowed_origins.clone(),
             defaults,
             sessions: Sessions::default(),
+            store,
         })
+    }
+
+    /// `GET /results/<id>.<csv|geojson>` — 저장된 결과 파일을 흘려 보낸다.
+    async fn download(&self, file: &str) -> Response<Body> {
+        let Some((path, mime)) = self.store.download_path(file) else {
+            return text(
+                StatusCode::NOT_FOUND,
+                "Not Found: 결과가 없거나 만료됐어요 — 다시 조회하세요",
+            );
+        };
+        let Ok(mut f) = tokio::fs::File::open(&path).await else {
+            return text(StatusCode::NOT_FOUND, "Not Found: 결과가 없거나 만료됐어요");
+        };
+        let len = f.metadata().await.map(|m| m.len()).unwrap_or(0);
+        let (tx, rx) = tokio::sync::mpsc::channel::<Bytes>(8);
+        tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let mut buf = vec![0u8; 64 * 1024];
+            loop {
+                match f.read(&mut buf).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        if tx.send(Bytes::copy_from_slice(&buf[..n])).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        let ctype = if mime == "text/csv" {
+            "text/csv; charset=utf-8"
+        } else {
+            mime
+        };
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", ctype)
+            .header("content-length", len)
+            .header(
+                "content-disposition",
+                format!("attachment; filename=\"{file}\""),
+            )
+            .body(BodyExt::boxed(ChannelBody(rx)))
+            .expect("valid response")
     }
 
     async fn call_inner(&self, req: Request<Full<Bytes>>) -> Response<Body> {
@@ -258,12 +306,6 @@ impl Gateway {
         B: http_body::Body<Data = Bytes> + Send + 'static,
         B::Error: std::error::Error + Send + Sync + 'static,
     {
-        if req.uri().path() != "/mcp" {
-            return (
-                text(StatusCode::NOT_FOUND, "Not Found: /mcp 만 있어요"),
-                "-".into(),
-            );
-        }
         if let Some(o) = req.headers().get("origin") {
             let ok = o.to_str().is_ok_and(|o| origin_allowed(o, &self.origins));
             if !ok {
@@ -289,6 +331,26 @@ impl Gateway {
                     .insert("www-authenticate", HeaderValue::from_static("Bearer"));
                 return (r, "-".into());
             }
+        }
+        // 결과 파일 내려받기(같은 토큰·Origin 검사를 거친 뒤).
+        if let Some(file) = req.uri().path().strip_prefix("/results/") {
+            if req.method() != Method::GET {
+                return (
+                    text(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed"),
+                    "-".into(),
+                );
+            }
+            let file = file.to_string();
+            return (self.download(&file).await, "GET results".into());
+        }
+        if req.uri().path() != "/mcp" {
+            return (
+                text(
+                    StatusCode::NOT_FOUND,
+                    "Not Found: /mcp · /results/<id>.<csv|geojson> 만 있어요",
+                ),
+                "-".into(),
+            );
         }
         if let Some(v) = req.headers().get("mcp-protocol-version") {
             if !v.to_str().is_ok_and(|v| KNOWN_VERSIONS.contains(&v)) {
@@ -908,7 +970,17 @@ mod tests {
     const DEF: &str = "DEFAULTKEY-0000-1111-2222-3333AAAA";
     const HDR: &str = "HEADERKEY0-4444-5555-6666-7777BBBB";
 
+    fn test_store() -> Store {
+        let dir =
+            std::env::temp_dir().join(format!("vworld-mcp-web-{}", vworld::mcp_results::new_id()));
+        Store::new(dir, Duration::from_secs(3600), 1 << 30)
+    }
+
     async fn start(token: Option<&str>, defaults: Vec<&str>) -> String {
+        start_with(token, defaults, test_store()).await
+    }
+
+    async fn start_with(token: Option<&str>, defaults: Vec<&str>, store: Store) -> String {
         let defaults = defaults
             .into_iter()
             .map(|k| Auth {
@@ -916,7 +988,10 @@ mod tests {
                 domain: None,
             })
             .collect();
-        let server = Server::new(defaults, None).unwrap().with_test_tools();
+        let server = Server::new(defaults, None)
+            .unwrap()
+            .with_test_tools()
+            .with_store(store);
         let opts = Options {
             addr: "127.0.0.1:0".into(),
             token: token.map(str::to_string),
@@ -1300,5 +1375,179 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         panic!("연결이 끊겼는데 작업이 멈추지 않았어요");
+    }
+
+    fn feats(n: usize) -> Vec<Value> {
+        (0..n)
+            .map(|i| json!({"type": "Feature", "geometry": {"type": "Point", "coordinates": [127.0, 37.5]},
+                "properties": {"pnu": format!("{:019}", i), "addr": "서울특별시 중구 태평로1가"}}))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn http_results_download_needs_token() {
+        let store = test_store();
+        let meta = store
+            .save("vworld_data", &json!({}), &feats(3), true)
+            .unwrap();
+        let id = meta["id"].as_str().unwrap().to_string();
+        let url = start_with(Some("tok-123"), vec![], store.clone()).await;
+        let base = url.trim_end_matches("/mcp");
+        let c = client();
+        let r = c
+            .get(format!("{base}/results/{id}.csv"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 401);
+        let r = c
+            .get(format!("{base}/results/{id}.csv"))
+            .bearer_auth("nope")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 401);
+        let r = c
+            .get(format!("{base}/results/{id}.csv"))
+            .bearer_auth("tok-123")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        assert!(r.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/csv"));
+        assert!(r.headers()["content-disposition"]
+            .to_str()
+            .unwrap()
+            .contains(&format!("{id}.csv")));
+        let len: usize = r.headers()["content-length"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        let body = r.text().await.unwrap();
+        assert_eq!(body.len(), len);
+        assert_eq!(body.lines().count(), 4);
+        let r = c
+            .get(format!("{base}/results/{id}.geojson"))
+            .bearer_auth("tok-123")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let r = c
+            .get(format!("{base}/results/{id}.jsonl"))
+            .bearer_auth("tok-123")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 404);
+        let r = c
+            .get(format!("{base}/results/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.csv"))
+            .bearer_auth("tok-123")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 404);
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[tokio::test]
+    async fn http_result_page_and_resources_read_without_keys() {
+        let store = test_store();
+        let shaped = vworld::mcp_results::shape_result(
+            &store,
+            "vworld_data",
+            &json!({}),
+            &json!({}),
+            Some((feats(30), true)),
+            &json!({}),
+            &vworld::mcp_results::Shape {
+                save: true,
+                format: Some(vworld::mcp_results::Format::Csv),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let first: Value = serde_json::from_str(&shaped.text).unwrap();
+        let id = first["result_id"].as_str().unwrap().to_string();
+        let cursor =
+            vworld::mcp_results::encode_cursor(&id, 10, vworld::mcp_results::Format::Csv, None);
+        let url = start_with(None, vec![], store.clone()).await; // 기본 키 없음
+        let c = client();
+        let r = post(&c, &url, json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}))
+            .send().await.unwrap();
+        let sid = r.headers()[SESSION_HEADER].to_str().unwrap().to_string();
+        let v: Value = serde_json::from_str(&r.text().await.unwrap()).unwrap();
+        assert!(
+            v["result"]["capabilities"]["resources"].is_object(),
+            "resources capability"
+        );
+        // 키 없이 다음 쪽.
+        let r = call(
+            &c,
+            &url,
+            &sid,
+            2,
+            "vworld_result_page",
+            json!({"cursor": cursor, "limit": 5}),
+        )
+        .await;
+        let v: Value = serde_json::from_str(&r.text().await.unwrap()).unwrap();
+        assert_ne!(v["result"]["isError"], true, "{v}");
+        let page: Value =
+            serde_json::from_str(v["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(page["returned_rows"], 5);
+        assert_eq!(page["total_rows"], 30);
+        assert!(page["data"].as_str().unwrap().starts_with("addr,pnu\n"));
+        let link = &v["result"]["content"][1];
+        assert_eq!(link["type"], "resource_link");
+        // resources/read
+        let r = post(
+            &c,
+            &url,
+            json!({"jsonrpc":"2.0","id":3,"method":"resources/read",
+            "params":{"uri": format!("vworld://results/{id}.csv")}}),
+        )
+        .header(SESSION_HEADER, &sid)
+        .send()
+        .await
+        .unwrap();
+        let v: Value = serde_json::from_str(&r.text().await.unwrap()).unwrap();
+        assert_eq!(v["result"]["contents"][0]["mimeType"], "text/csv");
+        assert_eq!(
+            v["result"]["contents"][0]["text"]
+                .as_str()
+                .unwrap()
+                .lines()
+                .count(),
+            31
+        );
+        // 만료(없는) 결과.
+        let gone = vworld::mcp_results::encode_cursor(
+            &vworld::mcp_results::new_id(),
+            0,
+            vworld::mcp_results::Format::Json,
+            None,
+        );
+        let r = call(
+            &c,
+            &url,
+            &sid,
+            4,
+            "vworld_result_page",
+            json!({"cursor": gone}),
+        )
+        .await;
+        let v: Value = serde_json::from_str(&r.text().await.unwrap()).unwrap();
+        assert_eq!(v["result"]["isError"], true);
+        assert!(v["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("만료"));
+        let _ = std::fs::remove_dir_all(&store.dir);
     }
 }

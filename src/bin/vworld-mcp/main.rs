@@ -8,18 +8,23 @@ mod web;
 
 use rmcp::{
     handler::server::wrapper::Parameters,
-    model::{CallToolResult, ContentBlock, ProgressNotificationParam, RequestId},
+    model::{
+        CallToolResult, ContentBlock, ErrorData, Implementation, ProgressNotificationParam,
+        ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, RequestId,
+        ServerCapabilities, ServerConfig,
+    },
     schemars,
     service::RequestContext,
     tool, tool_handler, tool_router, RoleServer, ServerHandler, ServiceExt,
 };
 use serde::Deserialize;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use vworld::api::{Auth, Client};
 use vworld::mcp::{self, DataInput, KeySource, NedInput, SearchInput, META_KEYS};
+use vworld::mcp_results::{self, Format, Shape, Store};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -102,6 +107,50 @@ struct DescribeArgs {
     data_id: String,
 }
 
+/// 큰 결과 모양 인자(vworld_data · vworld_ned 공통).
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+#[schemars(crate = "rmcp::schemars")]
+struct ShapeArgs {
+    /// 결과 형식: json(속성 객체 배열) · columns(columns+rows+dict, 큰 결과 기본) · csv(머리줄+행) · geojson(도형 포함 FeatureCollection). json·columns·csv 는 도형 없이 속성만. 비우면 작은 결과는 원래 응답 그대로
+    #[schemars(pattern(r"^(json|columns|csv|geojson)$"))]
+    format: Option<String>,
+    /// 남길 속성 이름(받아온 뒤 고르기). 예: ["pnu","jibun"]
+    #[schemars(length(min = 1, max = 100))]
+    properties: Option<Vec<String>>,
+    /// 받아온 뒤 거르기 {"속성": 값 | [값,...] | {"from":..,"to":..}}. 예: {"jibun":{"from":"1","to":"99"}}
+    filter: Option<Map<String, Value>>,
+    /// geojson 좌표 소수 자릿수 0~10(6 ≈ 10cm)
+    #[schemars(range(min = 0, max = 10))]
+    precision: Option<u32>,
+    /// true 면 작아도 파일로 저장하고 내려받기 링크(resource_link)를 줘요
+    save: Option<bool>,
+}
+
+impl ShapeArgs {
+    fn into_shape(self) -> anyhow::Result<Shape> {
+        let shape = Shape {
+            format: self.format.as_deref().map(Format::parse).transpose()?,
+            properties: self.properties,
+            filter: self.filter,
+            precision: self.precision,
+            save: self.save.unwrap_or(false),
+        };
+        shape.validate()?;
+        Ok(shape)
+    }
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+struct PageArgs {
+    /// 앞 응답의 next_cursor
+    #[schemars(length(min = 1, max = 512))]
+    cursor: String,
+    /// 이번 쪽 최대 행 수(비우면 상한 안에서 최대)
+    #[schemars(range(min = 1, max = 100000))]
+    limit: Option<u32>,
+}
+
 #[derive(Deserialize, schemars::JsonSchema)]
 #[schemars(crate = "rmcp::schemars")]
 struct DataArgs {
@@ -135,6 +184,8 @@ struct DataArgs {
     /// 응답 좌표계. 기본 EPSG:4326
     #[schemars(pattern(r"^EPSG:[0-9]{4,6}$"))]
     crs: Option<String>,
+    #[serde(flatten)]
+    shape: ShapeArgs,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -180,6 +231,8 @@ struct NedArgs {
     crs: Option<String>,
     /// 그 밖의 요청변수 {이름: 값}. 예: {"stdrYear":"2024","numOfRows":"100","maxFeatures":"100"}. key·domain·format·output 은 못 줌
     params: Option<Map<String, Value>>,
+    #[serde(flatten)]
+    shape: ShapeArgs,
 }
 
 // ───────────────────────── 서버 ─────────────────────────
@@ -188,6 +241,31 @@ pub(crate) struct State {
     client: Client,
     defaults: Vec<Auth>,
     domain: Option<String>,
+    store: Store,
+}
+
+/// 도구 결과(텍스트 + resource_link 항목).
+pub(crate) struct Reply {
+    text: String,
+    links: Vec<Value>,
+}
+
+impl From<Value> for Reply {
+    fn from(v: Value) -> Self {
+        Reply {
+            text: serde_json::to_string(&v).unwrap_or_else(|e| format!("직렬화 실패: {e}")),
+            links: vec![],
+        }
+    }
+}
+
+impl From<mcp_results::Shaped> for Reply {
+    fn from(s: mcp_results::Shaped) -> Self {
+        Reply {
+            text: s.text,
+            links: s.links,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -300,9 +378,21 @@ impl Server {
                 client: Client::new()?,
                 defaults,
                 domain,
+                store: Store::from_env(),
             }),
             tool_router: Self::tool_router(),
         })
+    }
+
+    /// 결과 저장소(정리 작업 · HTTP 내려받기용).
+    pub(crate) fn store(&self) -> Store {
+        self.st.store.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_store(mut self, store: Store) -> Self {
+        Arc::get_mut(&mut self.st).expect("생성 직후").store = store;
+        self
     }
 
     /// 기본 키 원문(스크럽 대상) — HTTP 계층이 응답 전체를 지울 때 쓴다.
@@ -321,36 +411,50 @@ impl Server {
     }
 
     /// 결과를 텍스트로 만들고, 요청 키·기본 키를 지운 뒤 크기를 제한한다.
-    fn finish(&self, used: &[Auth], r: anyhow::Result<Value>) -> CallToolResult {
+    fn finish<T: Into<Reply>>(&self, used: &[Auth], r: anyhow::Result<T>) -> CallToolResult {
         let secrets: Vec<&str> = used
             .iter()
             .chain(self.st.defaults.iter())
             .map(|a| a.key.as_str())
             .collect();
-        let (text, ok) = match r {
-            Ok(v) => (
-                serde_json::to_string(&v).unwrap_or_else(|e| format!("직렬화 실패: {e}")),
-                true,
+        let (reply, ok) = match r {
+            Ok(v) => (v.into(), true),
+            Err(e) => (
+                Reply {
+                    text: format!("{e:#}"),
+                    links: vec![],
+                },
+                false,
             ),
-            Err(e) => (format!("{e:#}"), false),
         };
-        let text = mcp::cap_output(mcp::scrub(&text, &secrets));
+        let mut content = vec![ContentBlock::text(mcp::cap_output(mcp::scrub(
+            &reply.text,
+            &secrets,
+        )))];
+        // 저장된 결과 파일 안내(MCP resource_link). 파일·링크에는 키가 없다.
+        content.extend(
+            reply
+                .links
+                .into_iter()
+                .filter_map(|l| serde_json::from_value::<ContentBlock>(l).ok()),
+        );
         if ok {
-            CallToolResult::success(vec![ContentBlock::text(text)])
+            CallToolResult::success(content)
         } else {
-            CallToolResult::error(vec![ContentBlock::text(text)])
+            CallToolResult::error(content)
         }
     }
 
     /// 키가 필요한 도구 공통: 키 선택 → [`Self::run`].
-    async fn keyed<F, Fut>(&self, ctx: &RequestContext<RoleServer>, f: F) -> CallToolResult
+    async fn keyed<F, Fut, T>(&self, ctx: &RequestContext<RoleServer>, f: F) -> CallToolResult
     where
         F: FnOnce(Arc<State>, Vec<Auth>, Reporter) -> Fut,
-        Fut: std::future::Future<Output = anyhow::Result<Value>>,
+        Fut: std::future::Future<Output = anyhow::Result<T>>,
+        T: Into<Reply>,
     {
         let auths = match self.keys(ctx) {
             Ok(a) => a,
-            Err(e) => return self.finish(&[], Err(anyhow::anyhow!(e))),
+            Err(e) => return self.finish(&[], Err::<Reply, _>(anyhow::anyhow!(e))),
         };
         let st = self.st.clone();
         let used = auths.clone();
@@ -361,7 +465,7 @@ impl Server {
     ///
     /// 취소되면 작업 future 를 버려 진행 중인 VWorld 호출도 멈추고, 그 요청의 응답은
     /// 취소 표시로 전송 계층이 버린다(규격: 취소된 요청에는 답하지 않음).
-    async fn run<F, Fut>(
+    async fn run<F, Fut, T>(
         &self,
         ctx: &RequestContext<RoleServer>,
         used: &[Auth],
@@ -369,7 +473,8 @@ impl Server {
     ) -> CallToolResult
     where
         F: FnOnce(Reporter) -> Fut,
-        Fut: std::future::Future<Output = anyhow::Result<Value>>,
+        Fut: std::future::Future<Output = anyhow::Result<T>>,
+        T: Into<Reply>,
     {
         let (rep, forwarder) = progress_forwarder(ctx);
         let work = f(rep);
@@ -389,7 +494,7 @@ impl Server {
             None => {
                 let id = serde_json::to_string(&ctx.id).unwrap_or_default();
                 mark_cancelled(cancel_key(&session_of(ctx), &id));
-                self.finish(used, Err(anyhow::anyhow!("요청이 취소됐어요")))
+                self.finish(used, Err::<Reply, _>(anyhow::anyhow!("요청이 취소됐어요")))
             }
         }
     }
@@ -482,7 +587,7 @@ impl Server {
     }
 
     #[tool(
-        description = "2D 데이터 조회(/req/data GetFeature) — 레이어 + 공간 필터(geom_filter) 또는 속성 필터(attr_filter). 둘 다 없으면 emd_cd 필요. 함정: geom_filter 에 EPSG 접미사 금지(좌표는 EPSG:4326 해석), BOX/POLYGON 은 면적 10km² 이내(넘으면 INVALID_RANGE — 나눠서 조회). size 기본 100·상한 1000. 좌표→필지(PNU): data_id=LP_PA_CBND_BUBUN, geom_filter=\"POINT(경도 위도)\"",
+        description = "2D 데이터 조회(/req/data GetFeature) — 레이어 + 공간 필터(geom_filter) 또는 속성 필터(attr_filter). 둘 다 없으면 emd_cd 필요. 함정: geom_filter 에 EPSG 접미사 금지(좌표는 EPSG:4326 해석), BOX/POLYGON 은 면적 10km² 이내(넘으면 INVALID_RANGE — 나눠서 조회). size 기본 100·상한 1000, pages 로 여러 쪽. 좌표→필지(PNU): data_id=LP_PA_CBND_BUBUN, geom_filter=\"POINT(경도 위도)\". 큰 결과: 먼저 properties·filter 로 줄이세요. 응답이 약 200KB 를 넘으면 첫 쪽 + next_cursor(vworld_result_page) + 전체 파일(download·resource_link, csv·geojson)을 줘요. 형식 format: columns(기본)·csv·json·geojson(도형, precision 으로 좌표 줄이기)",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn vworld_data(
@@ -501,8 +606,23 @@ impl Server {
             pages: a.pages,
             crs: crs_or_4326(a.crs),
         };
+        let summary = json!({"data_id": input.data_id, "geom_filter": input.geom_filter,
+            "attr_filter": input.attr_filter, "emd_cd": input.emd_cd, "columns": input.columns,
+            "size": input.size, "page": input.page, "pages": input.pages, "crs": input.crs});
+        let shape = a.shape.into_shape();
         self.keyed(&ctx, |st, k, p| async move {
-            mcp::data(&st.client, &k, &input, &*p).await
+            let shape = shape?;
+            let out = mcp::data(&st.client, &k, &input, &*p).await?;
+            let items = mcp::data_items(&out);
+            mcp_results::shape_result(
+                &st.store,
+                "vworld_data",
+                &summary,
+                &out,
+                items,
+                &mcp::data_info(&out),
+                &shape,
+            )
         })
         .await
     }
@@ -538,7 +658,7 @@ impl Server {
     }
 
     #[tool(
-        description = "국가중점데이터(NED) data·WFS 단건 조회(/ned/data|wfs/<operation>). 먼저 vworld_ned_list 로 오퍼레이션명·필수 변수를 확인하세요. 필지 속성은 pnu(19자리, 주소면 vworld_zoning 이나 vworld_data 로 먼저 얻기). INVALID_TYPE 이면 pnu 를 8자리 이상으로. WFS 는 기본 EPSG:4326(srsName), 건수는 params.maxFeatures(최대 1000), data 계열은 params.numOfRows·pageNo. WMS(이미지) 계열은 거부",
+        description = "국가중점데이터(NED) data·WFS 단건 조회(/ned/data|wfs/<operation>). 먼저 vworld_ned_list 로 오퍼레이션명·필수 변수를 확인하세요. 필지 속성은 pnu(19자리, 주소면 vworld_zoning 이나 vworld_data 로 먼저 얻기). INVALID_TYPE 이면 pnu 를 8자리 이상으로. WFS 는 기본 EPSG:4326(srsName), 건수는 params.maxFeatures(최대 1000), data 계열은 params.numOfRows·pageNo. WMS(이미지) 계열은 거부. 큰 결과는 properties·filter 로 줄이고, 상한을 넘으면 첫 쪽 + next_cursor(vworld_result_page) + 전체 파일(download)을 줘요. format: columns·csv·json·geojson(WFS 만)",
         annotations(read_only_hint = true, open_world_hint = true)
     )]
     async fn vworld_ned(
@@ -553,19 +673,77 @@ impl Server {
             crs: a.crs,
             params: a.params.unwrap_or_default(),
         };
+        let summary = json!({"operation": input.operation, "pnu": input.pnu, "bbox": input.bbox,
+            "crs": input.crs, "params": input.params});
+        let shape = a.shape.into_shape();
         self.keyed(&ctx, |st, k, p| async move {
-            mcp::ned(&st.client, &k, &input, &*p).await
+            let shape = shape?;
+            let out = mcp::ned(&st.client, &k, &input, &*p).await?;
+            let items = mcp::ned_items(&out);
+            mcp_results::shape_result(
+                &st.store,
+                "vworld_ned",
+                &summary,
+                &out,
+                items,
+                &mcp::ned_info(&out),
+                &shape,
+            )
+        })
+        .await
+    }
+
+    #[tool(
+        description = "저장된 큰 결과의 다음 쪽(vworld_data · vworld_ned 응답의 next_cursor 를 그대로). 다시 조회하지 않고 API 키도 필요 없어요. 같은 형식으로 이어 주고, 마지막 쪽이면 next_cursor 가 없어요. limit 로 쪽 크기를 줄일 수 있어요. 결과는 기본 1시간 뒤 만료 — 그러면 다시 조회하세요",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn vworld_result_page(
+        &self,
+        Parameters(a): Parameters<PageArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> CallToolResult {
+        let st = self.st.clone();
+        self.run(&ctx, &[], move |_p| async move {
+            mcp_results::result_page(&st.store, &a.cursor, a.limit.map(|l| l as usize))
         })
         .await
     }
 }
 
-#[tool_handler(
-    router = self.tool_router,
-    name = "vworld-mcp",
-    instructions = "VWorld(국토교통부 공간정보 오픈플랫폼) 읽기 전용 도구. 주소→좌표 vworld_geocode, 좌표→주소 vworld_reverse_geocode, 검색 vworld_search, 용도지역 vworld_zoning, 2D 데이터 vworld_data_layers→vworld_data_describe→vworld_data, 국가중점데이터 vworld_ned_list→vworld_ned. 지도 이미지·파일 내보내기는 없어요."
-)]
-impl ServerHandler for Server {}
+const INSTRUCTIONS: &str = "VWorld(국토교통부 공간정보 오픈플랫폼) 읽기 전용 도구. 주소→좌표 vworld_geocode, 좌표→주소 vworld_reverse_geocode, 검색 vworld_search, 용도지역 vworld_zoning, 2D 데이터 vworld_data_layers→vworld_data_describe→vworld_data, 국가중점데이터 vworld_ned_list→vworld_ned. 큰 결과는 properties·filter 로 줄이고, 넘치면 next_cursor 로 vworld_result_page, 전체는 resource_link(resources/read) 또는 download. 지도 이미지는 없어요.";
+
+#[tool_handler(router = self.tool_router)]
+impl ServerHandler for Server {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
+        .with_server_info(Implementation::new("vworld-mcp", VERSION))
+        .with_instructions(INSTRUCTIONS.to_string())
+    }
+
+    /// 저장된 결과 파일(`vworld://results/<id>.csv|geojson`). 20MB 넘으면 내려받기를 쓰라고 오류.
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _ctx: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
+        let store = self.st.store.clone();
+        let uri = request.uri.clone();
+        let read = tokio::task::spawn_blocking(move || mcp_results::read_resource(&store, &uri))
+            .await
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+        let (mime, text) = read.map_err(|e| ErrorData::invalid_params(e.to_string(), None))?;
+        let res: ReadResourceResult = serde_json::from_value(
+            json!({"contents": [{"uri": request.uri, "mimeType": mime, "text": text}]}),
+        )
+        .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+        Ok(res.into())
+    }
+}
 
 // ───────────────────────── 시험 전용 도구 ─────────────────────────
 
@@ -752,6 +930,15 @@ async fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
+    // 결과 저장소 정리: 시작할 때와 10분마다(TTL · 용량 상한).
+    let store = server.store();
+    tokio::spawn(async move {
+        loop {
+            let s = store.clone();
+            let _ = tokio::task::spawn_blocking(move || s.cleanup()).await;
+            tokio::time::sleep(Duration::from_secs(600)).await;
+        }
+    });
 
     if let Some(addr) = http_addr {
         let opts = web::Options::from_env(&addr);
@@ -799,6 +986,7 @@ mod tests {
                 "vworld_geocode",
                 "vworld_ned",
                 "vworld_ned_list",
+                "vworld_result_page",
                 "vworld_reverse_geocode",
                 "vworld_search",
                 "vworld_zoning",
@@ -839,7 +1027,7 @@ mod tests {
         let s = Server::new(vec![def.clone()], None).unwrap();
         let r = s.finish(
             std::slice::from_ref(&req),
-            Err(anyhow::anyhow!(
+            Err::<Value, _>(anyhow::anyhow!(
                 "HTTP 401: https://api.vworld.kr/req?key={}&k2={}",
                 req.key,
                 def.key

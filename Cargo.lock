@@ -2253,6 +2253,7 @@ version = "0.3.7"
 dependencies = [
  "anyhow",
  "async-channel",
+ "base64 0.22.1",
  "bytes",
  "calamine",
  "clap",

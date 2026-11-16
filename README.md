@@ -243,6 +243,9 @@ vworld-mcp --version
 | `VWORLD_API_KEYS` | 기본 키. 쉼표로 여러 개(`KEY1,KEY2`) — 호출마다 돌려 쓰고 429 가 난 키는 쿨다운 동안 뒤로 미룹니다 |
 | `VWORLD_DOMAIN` | 도메인 등록 키일 때만. `domain=` 쿼리·Referer 로 붙습니다(무도메인 키는 비워 둠) |
 | `VWORLD_MCP_TOKEN` | HTTP 모드 Bearer 토큰. 있으면 `Authorization: Bearer <토큰>` 필수. loopback 이 아닌 주소에서는 없으면 시작하지 않음 |
+| `MCP_RESULTS_DIR` | 큰 결과 저장 폴더(기본 `~/.vworld/cache/mcp-results`). 게이트웨이가 정해 넘기면 같은 폴더에서 내려줌 |
+| `MCP_RESULTS_TTL` | 저장 결과 보관 시간(초, 또는 `30m`·`1h`). 기본 1시간 |
+| `MCP_RESULTS_MAX_BYTES` | 저장 폴더 전체 상한(바이트). 기본 1GB — 넘으면 오래된 것부터 지움 |
 | `VWORLD_MCP_ALLOWED_ORIGINS` | HTTP 모드에서 받아 줄 `Origin`(쉼표, 예 `https://app.example.kr`). `http://localhost:*`·`http://127.0.0.1:*` 는 늘 허용 |
 
 `VWORLD_API_KEYS` 가 없으면 CLI 설정 파일 `~/.vworld/config.toml`(`vworld config add-key`)의 키를 씁니다. 둘 다 없어도 서버는 뜨고 `tools/list` 와 오프라인 도구(`vworld_data_layers`·`vworld_data_describe`·`vworld_ned_list`)는 동작하며, 키가 필요한 도구는 `isError: true` + "VWorld API 키가 없어요" 를 돌려줍니다.
@@ -325,12 +328,30 @@ bearer_token_env_var = "VWORLD_MCP_TOKEN"
 | `vworld_search` | `query`, `type`(PLACE·ADDRESS·DISTRICT·ROAD), `category`, `size`, `page`, `bbox`, `crs` | 장소·주소·행정구역·도로명 검색. ADDRESS·DISTRICT 는 category 필수 |
 | `vworld_data_layers` | `search`, `cat`, `geom` | 2D 데이터 레이어 158종 목록(내장, 키 불필요) |
 | `vworld_data_describe` | `data_id` | 레이어 속성표(내장, 키 불필요) |
-| `vworld_data` | `data_id`, `geom_filter`·`attr_filter`·`emd_cd` 중 하나 이상, `columns`, `size`(기본 100·상한 1000), `page`, `pages`(1~10, 여러 쪽 합치기), `crs` | 2D 데이터 GetFeature. geom_filter 에 EPSG 접미사 금지, BOX/POLYGON 10km² 이내 |
+| `vworld_data` | `data_id`, `geom_filter`·`attr_filter`·`emd_cd` 중 하나 이상, `columns`, `size`(기본 100·상한 1000), `page`, `pages`(1~10, 여러 쪽 합치기), `crs` + 큰 결과 인자(아래) | 2D 데이터 GetFeature. geom_filter 에 EPSG 접미사 금지, BOX/POLYGON 10km² 이내 |
 | `vworld_zoning` | `address` 또는 `x`·`y`(EPSG:4326) | 지점 → 필지(PNU) → 토지이용계획(용도지역·지구) `getLandUseAttr` 요약+원응답 |
 | `vworld_ned_list` | `kind`, `search`, `operation` | 국가중점데이터 115 오퍼레이션 목록, operation 을 주면 요청변수 |
-| `vworld_ned` | `operation`(data·wfs 계열), `pnu`, `bbox`, `crs`, `params`{이름:값} | NED 단건 조회. WMS(이미지) 계열은 거부. WFS 는 기본 srsName EPSG:4326 |
+| `vworld_ned` | `operation`(data·wfs 계열), `pnu`, `bbox`, `crs`, `params`{이름:값} + 큰 결과 인자(아래) |
+| `vworld_result_page` | `cursor`, `limit` | 저장된 큰 결과의 다음 쪽(다시 조회 안 함, 키 불필요) | NED 단건 조회. WMS(이미지) 계열은 거부. WFS 는 기본 srsName EPSG:4326 |
 
 결과는 `content[0].text` 의 JSON 입니다. 약 200KB 를 넘으면 잘라내고 "잘림: 범위를 좁히세요" 를 붙입니다. 입력은 형식(EPSG 코드, PNU 숫자 8~19자리, bbox 숫자 4개, data_id·오퍼레이션 이름, 길이 상한)을 검사하고, 어긋나면 `isError: true` 로 이유를 돌려줍니다. `tools/call` 여러 개가 동시에 와도 각각 따로 처리합니다. 네트워크는 `api.vworld.kr` 만 씁니다.
+
+### 큰 결과 (`vworld_data` · `vworld_ned`)
+
+도구 응답은 약 200KB 상한을 지킵니다. 대신 같은 데이터를 촘촘히 · 나눠서 · 줄여서 · 파일로 받습니다.
+
+| 인자 | 설명 |
+|------|------|
+| `format` | `columns`(큰 결과 기본: `{"columns":[..],"rows":[[..]],"dict":{열:{코드:값}}}` — 반복되는 긴 문자열은 dict 로 한 번만) · `csv`(머리줄+행) · `json`(속성 객체 배열) · `geojson`(도형 포함 FeatureCollection, WFS·2D 데이터만). columns·csv·json 은 도형 없이 속성만. 비우면 작은 결과는 예전 응답 그대로 |
+| `properties` | 남길 속성 이름(받아온 뒤 고르기) |
+| `filter` | 받아온 뒤 거르기 `{"속성": 값 \| [값,..] \| {"from":..,"to":..}}` |
+| `precision` | geojson 좌표 소수 자릿수(0~10) |
+| `save` | `true` 면 작아도 파일로 저장 |
+
+응답 맨 앞 요약 칸: `total_rows`, `returned_rows`, `truncated`, `format`, `result_id`(저장했으면), `next_cursor`(더 있으면), `download`(파일 URI·HTTP 경로·크기), `info`(서버 전체 건수 등), 그리고 `data`.
+상한을 넘으면 첫 쪽(geojson 은 쪽마다 올바른 FeatureCollection)과 `next_cursor` 를 주고, `vworld_result_page {cursor, limit?}` 로 끝까지 받습니다. 결과가 만료되면 "결과가 만료됐어요 — 다시 조회하세요".
+
+저장된 결과는 `resource_link` 내용 항목(`vworld://results/<id>.csv` `text/csv`, `vworld://results/<id>.geojson` `application/geo+json`)으로 알리고, `resources/read` 로 읽을 수 있습니다(20MB 넘으면 내려받기를 쓰라는 오류). HTTP 모드에서는 `GET /results/<id>.csv|geojson`(같은 Bearer 토큰)으로 내려받습니다. 파일은 `<id>.jsonl`(쪽 나누기용) · `.csv` · `.geojson` · `.meta.json`, id 는 무작위 256bit, 키·토큰은 넣지 않습니다. 쓰기는 임시 파일 → rename 이라 여러 프로세스가 같은 폴더를 써도 됩니다. 시작할 때와 10분마다 TTL·용량 정리.
 
 ### smoke
 

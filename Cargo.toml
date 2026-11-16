@@ -19,7 +19,7 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "io-util"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "gzip"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -45,6 +45,7 @@ http-body-util = "0.1"
 bytes = "1"
 tower-service = "0.3"
 uuid = { version = "1", features = ["v4"] }
+base64 = "0.22"
 
 [dev-dependencies]
 mockito = "1"
