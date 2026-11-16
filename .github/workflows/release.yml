@@ -3,6 +3,7 @@ name: release
 # git tag v* 푸시(또는 수동 실행) 시 3-OS 네이티브 빌드 → GitHub Releases 자산 게시.
 #   - 바이너리는 git 에 두지 않고 CI 가 소스에서 빌드한다.
 #   - 자산: vworld-macos(universal) · vworld(arm64) · vworld-linux(x86_64 musl 정적) · vworld-windows.exe · vworld-skill.zip
+#   - MCP 서버(stdio): vworld-mcp-macos-arm64 · vworld-mcp-macos-x86_64 · vworld-mcp-linux-x86_64 · vworld-mcp-windows-x86_64.exe (같은 SHA256SUMS)
 on:
   push:
     tags: ["v*"]
@@ -47,6 +48,8 @@ jobs:
             target/aarch64-apple-darwin/release/vworld \
             target/x86_64-apple-darwin/release/vworld
           cp target/aarch64-apple-darwin/release/vworld vworld
+          cp target/aarch64-apple-darwin/release/vworld-mcp vworld-mcp-macos-arm64
+          cp target/x86_64-apple-darwin/release/vworld-mcp vworld-mcp-macos-x86_64
 
       # Linux: musl 정적 빌드 — ubuntu-latest 의 최신 glibc(GLIBC_2.39) 요구를 피해 어떤 배포판에서도 실행.
       # rusqlite(bundled)·ring 의 C 코드 컴파일에 musl-gcc 가 필요하다.
@@ -60,6 +63,7 @@ jobs:
           rustup target add x86_64-unknown-linux-musl
           cargo build --release --target x86_64-unknown-linux-musl
           cp target/x86_64-unknown-linux-musl/release/vworld vworld-linux
+          cp target/x86_64-unknown-linux-musl/release/vworld-mcp vworld-mcp-linux-x86_64
 
       - name: 정적 링크 확인 (Linux)
         if: runner.os == 'Linux'
@@ -67,12 +71,15 @@ jobs:
           file vworld-linux
           file vworld-linux | grep -Eq 'statically linked|static-pie linked' \
             || { echo "::error::vworld-linux 가 정적 링크가 아닙니다"; exit 1; }
+          file vworld-mcp-linux-x86_64 | grep -Eq 'statically linked|static-pie linked' \
+            || { echo "::error::vworld-mcp-linux-x86_64 가 정적 링크가 아닙니다"; exit 1; }
 
       - name: Build Windows (msvc)
         if: runner.os == 'Windows'
         run: |
           cargo build --release
           copy target\release\vworld.exe vworld-windows.exe
+          copy target\release\vworld-mcp.exe vworld-mcp-windows-x86_64.exe
 
       - name: Upload artifacts (macOS)
         if: runner.os == 'macOS'
@@ -82,6 +89,8 @@ jobs:
           path: |
             vworld-macos
             vworld
+            vworld-mcp-macos-arm64
+            vworld-mcp-macos-x86_64
           retention-days: 1
 
       - name: Upload artifact (Linux)
@@ -89,7 +98,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: vworld-linux
+          path: |
+            vworld-linux
+            vworld-mcp-linux-x86_64
           retention-days: 1
 
       - name: Upload artifact (Windows)
@@ -97,7 +108,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: vworld-windows.exe
+          path: |
+            vworld-windows.exe
+            vworld-mcp-windows-x86_64.exe
           retention-days: 1
 
   # ── 2) skill zip 패키징 + Release 게시 ────────────────────────────────
@@ -184,6 +197,10 @@ jobs:
             artifacts/macos/vworld \
             artifacts/linux/vworld-linux \
             artifacts/windows/vworld-windows.exe \
+            artifacts/macos/vworld-mcp-macos-arm64 \
+            artifacts/macos/vworld-mcp-macos-x86_64 \
+            artifacts/linux/vworld-mcp-linux-x86_64 \
+            artifacts/windows/vworld-mcp-windows-x86_64.exe \
             vworld-skill.zip \
             vworld-skill-files.zip \
             | sed 's| [^ ]*/| |' > SHA256SUMS
@@ -200,6 +217,10 @@ jobs:
             artifacts/macos/vworld
             artifacts/linux/vworld-linux
             artifacts/windows/vworld-windows.exe
+            artifacts/macos/vworld-mcp-macos-arm64
+            artifacts/macos/vworld-mcp-macos-x86_64
+            artifacts/linux/vworld-mcp-linux-x86_64
+            artifacts/windows/vworld-mcp-windows-x86_64.exe
             vworld-skill.zip
             vworld-skill-files.zip
             SHA256SUMS

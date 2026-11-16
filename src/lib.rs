@@ -10,6 +10,7 @@ pub mod dxf;
 pub mod geomath;
 pub mod hjd_db;
 pub mod hjd_shp;
+pub mod mcp;
 pub mod ned_registry;
 pub mod output;
 pub mod shp;

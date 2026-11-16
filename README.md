@@ -211,6 +211,89 @@ vworld map choropleth --geojson joined.geojson --value-field population \
 
 ---
 
+## MCP 서버 (`vworld-mcp`)
+
+같은 저장소의 별도 실행 파일 **`vworld-mcp`** 는 VWorld 조회를 **읽기 전용 MCP 도구**로 내놓는 stdio 서버입니다. CLI 와 같은 라이브러리 함수(HTTP 클라이언트·재시도·응답 정규화·레지스트리)를 직접 호출하며, CLI 명령과 동작은 그대로입니다. 지도 이미지·타일·StaticMap·WMS 이미지·파일 내보내기·설정 변경은 넣지 않았습니다.
+
+### 설치
+
+[Releases](https://github.com/clazic/vworld/releases/latest) 에서 OS 에 맞는 자산을 받습니다(CLI 와 같은 태그, 같은 `SHA256SUMS` 로 검증).
+
+| OS | 자산 |
+|----|------|
+| macOS (Apple Silicon) | `vworld-mcp-macos-arm64` |
+| macOS (Intel) | `vworld-mcp-macos-x86_64` |
+| Linux x86_64 (musl 정적) | `vworld-mcp-linux-x86_64` |
+| Windows x86_64 | `vworld-mcp-windows-x86_64.exe` |
+
+```bash
+curl -LO https://github.com/clazic/vworld/releases/latest/download/vworld-mcp-macos-arm64
+curl -LO https://github.com/clazic/vworld/releases/latest/download/SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing
+chmod +x vworld-mcp-macos-arm64 && mv vworld-mcp-macos-arm64 ~/.local/bin/vworld-mcp
+vworld-mcp --version
+```
+
+소스 빌드: `cargo build --release` → `target/release/vworld-mcp`.
+
+### 키 (환경변수)
+
+| 변수 | 설명 |
+|------|------|
+| `VWORLD_API_KEYS` | 기본 키. 쉼표로 여러 개(`KEY1,KEY2`) — 호출마다 돌려 쓰고 429 가 난 키는 쿨다운 동안 뒤로 미룹니다 |
+| `VWORLD_DOMAIN` | 도메인 등록 키일 때만. `domain=` 쿼리·Referer 로 붙습니다(무도메인 키는 비워 둠) |
+
+`VWORLD_API_KEYS` 가 없으면 CLI 설정 파일 `~/.vworld/config.toml`(`vworld config add-key`)의 키를 씁니다. 둘 다 없어도 서버는 뜨고 `tools/list` 와 오프라인 도구(`vworld_data_layers`·`vworld_data_describe`·`vworld_ned_list`)는 동작하며, 키가 필요한 도구는 `isError: true` + "VWorld API 키가 없어요" 를 돌려줍니다.
+
+**요청별 키** — `tools/call` 의 `params._meta["kr.pes/keys"]` 에 문자열 배열로 줍니다. 있으면 **그 키만** 쓰고 기본 키로 넘어가지 않습니다(빈 배열이면 오류).
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{
+  "name":"vworld_geocode","arguments":{"address":"세종대로 110"},
+  "_meta":{"kr.pes/keys":["XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"]}}}
+```
+
+키는 인자·로그·stderr·결과·오류 어디에도 원문으로 나오지 않습니다. 응답 직전 모든 텍스트에서 그 요청의 키와 기본 키를 `***<끝4자리>` 로 바꿉니다(단위 테스트로 확인). 파일 캐시는 없습니다.
+
+### 클라이언트 설정 (stdio)
+
+Claude Code:
+
+```bash
+claude mcp add vworld -e VWORLD_API_KEYS=<KEY> -- /path/to/vworld-mcp
+```
+
+Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.vworld]
+command = "/path/to/vworld-mcp"
+env = { VWORLD_API_KEYS = "<KEY>" }
+```
+
+### 도구 (모두 읽기 전용)
+
+| 도구 | 입력 | 하는 일 |
+|------|------|--------|
+| `vworld_geocode` | `address`, `type`(auto·ROAD·PARCEL), `crs` | 주소 → 좌표. auto 는 도로명→지번 자동 폴백 |
+| `vworld_reverse_geocode` | `x`, `y`, `type`(BOTH·ROAD·PARCEL), `crs` | 좌표 → 지번·도로명 주소 |
+| `vworld_search` | `query`, `type`(PLACE·ADDRESS·DISTRICT·ROAD), `category`, `size`, `page`, `bbox`, `crs` | 장소·주소·행정구역·도로명 검색. ADDRESS·DISTRICT 는 category 필수 |
+| `vworld_data_layers` | `search`, `cat`, `geom` | 2D 데이터 레이어 158종 목록(내장, 키 불필요) |
+| `vworld_data_describe` | `data_id` | 레이어 속성표(내장, 키 불필요) |
+| `vworld_data` | `data_id`, `geom_filter`·`attr_filter`·`emd_cd` 중 하나 이상, `columns`, `size`(기본 100·상한 1000), `page`, `crs` | 2D 데이터 GetFeature. geom_filter 에 EPSG 접미사 금지, BOX/POLYGON 10km² 이내 |
+| `vworld_zoning` | `address` 또는 `x`·`y`(EPSG:4326) | 지점 → 필지(PNU) → 토지이용계획(용도지역·지구) `getLandUseAttr` 요약+원응답 |
+| `vworld_ned_list` | `kind`, `search`, `operation` | 국가중점데이터 115 오퍼레이션 목록, operation 을 주면 요청변수 |
+| `vworld_ned` | `operation`(data·wfs 계열), `pnu`, `bbox`, `crs`, `params`{이름:값} | NED 단건 조회. WMS(이미지) 계열은 거부. WFS 는 기본 srsName EPSG:4326 |
+
+결과는 `content[0].text` 의 JSON 입니다. 약 200KB 를 넘으면 잘라내고 "잘림: 범위를 좁히세요" 를 붙입니다. 입력은 형식(EPSG 코드, PNU 숫자 8~19자리, bbox 숫자 4개, data_id·오퍼레이션 이름, 길이 상한)을 검사하고, 어긋나면 `isError: true` 로 이유를 돌려줍니다. `tools/call` 여러 개가 동시에 와도 각각 따로 처리합니다. 네트워크는 `api.vworld.kr` 만 씁니다.
+
+### smoke
+
+- 키 없이: `initialize` → `tools/list` 성공(도구 9개).
+- 키 있으면: 도구 `vworld_geocode`, 인자 `{"address":"세종대로 110"}` → `isError` 없이 `point.x`·`point.y` 가 담긴 결과.
+
+---
+
 ## 주요 기능
 
 | 명령 | 설명 |
