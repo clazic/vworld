@@ -484,6 +484,22 @@ impl Gateway {
                 }
             }
         };
+        // X-Api-Domain 검사(요청별 VWorld domain). 값은 기록하지 않는다.
+        if let Some(v) = parts.headers.get("x-api-domain") {
+            let checked = match v.to_str() {
+                Ok(d) => mcp::check_domain(d.trim()),
+                Err(_) => Err("X-Api-Domain 형식이 올바르지 않아요".to_string()),
+            };
+            if let Err(e) = checked {
+                return (
+                    text(
+                        StatusCode::BAD_REQUEST,
+                        &format!("Bad Request: X-Api-Domain — {e}"),
+                    ),
+                    "-".into(),
+                );
+            }
+        }
         let accepts_sse = parts
             .headers
             .get("accept")
@@ -610,6 +626,11 @@ impl Gateway {
                 if let Some(meta) = meta {
                     if !api_keys.is_empty() && !meta.contains_key(mcp::META_KEYS) {
                         meta.insert(mcp::META_KEYS.into(), json!(api_keys));
+                    }
+                    if let Some(d) = headers.get("x-api-domain").and_then(|v| v.to_str().ok()) {
+                        if !meta.contains_key(mcp::META_DOMAIN) {
+                            meta.insert(mcp::META_DOMAIN.into(), json!(d.trim()));
+                        }
                     }
                     if let Some(Value::Array(ks)) = meta.get(mcp::META_KEYS) {
                         call_keys.extend(ks.iter().filter_map(|k| k.as_str().map(str::to_string)));
@@ -1549,5 +1570,147 @@ mod tests {
             .unwrap()
             .contains("만료"));
         let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    async fn keys_call(
+        c: &reqwest::Client,
+        url: &str,
+        sid: &str,
+        id: u64,
+        meta: Value,
+        headers: &[(&str, &str)],
+        sleep_ms: u64,
+    ) -> Value {
+        let mut rb = post(
+            c,
+            url,
+            json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{
+                "name":"test_keys","arguments":{"sleep_ms": sleep_ms},"_meta": meta}}),
+        )
+        .header(SESSION_HEADER, sid);
+        for (k, v) in headers {
+            rb = rb.header(*k, *v);
+        }
+        let r = rb.send().await.unwrap();
+        assert_eq!(r.status(), 200);
+        let v: Value = serde_json::from_str(&r.text().await.unwrap()).unwrap();
+        v["result"].clone()
+    }
+
+    fn domains_of(result: &Value) -> Vec<Value> {
+        assert_ne!(result["isError"], true, "{result}");
+        let t: Value =
+            serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
+        t["domains"].as_array().unwrap().clone()
+    }
+
+    async fn start_env_domain(defaults: Vec<Auth>) -> String {
+        let server = Server::new(defaults, Some("https://env.example".into()))
+            .unwrap()
+            .with_test_tools()
+            .with_store(test_store());
+        let opts = Options {
+            addr: "127.0.0.1:0".into(),
+            token: None,
+            allowed_origins: vec![],
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        tokio::spawn(run_listener(listener, Gateway::new(server, &opts, true)));
+        url
+    }
+
+    #[tokio::test]
+    async fn http_domain_meta_header_fallback_and_invalid() {
+        // 기본 키는 env 도메인을 달고 있음(VWORLD_DOMAIN 으로 로드된 것과 같음).
+        let def = Auth {
+            key: DEF.into(),
+            domain: Some("https://env.example".into()),
+        };
+        let url = start_env_domain(vec![def]).await;
+        let c = client();
+        let sid = init(&c, &url, None).await;
+        // 없으면 env 도메인(기본 키·요청별 키 모두).
+        let r = keys_call(&c, &url, &sid, 1, json!({}), &[], 0).await;
+        assert_eq!(domains_of(&r), vec![json!("https://env.example")]);
+        let r = keys_call(&c, &url, &sid, 2, json!({}), &[("x-api-keys", HDR)], 0).await;
+        assert_eq!(domains_of(&r), vec![json!("https://env.example")]);
+        // _meta 도메인이 우선.
+        let r = keys_call(
+            &c,
+            &url,
+            &sid,
+            3,
+            json!({"kr.pes/domain": "https://pes.uri-jylee.workers.dev"}),
+            &[],
+            0,
+        )
+        .await;
+        assert_eq!(
+            domains_of(&r),
+            vec![json!("https://pes.uri-jylee.workers.dev")]
+        );
+        // X-Api-Domain 머리글도 같게.
+        let r = keys_call(
+            &c,
+            &url,
+            &sid,
+            4,
+            json!({}),
+            &[("x-api-keys", HDR), ("x-api-domain", "https://hdr.example")],
+            0,
+        )
+        .await;
+        assert_eq!(domains_of(&r), vec![json!("https://hdr.example")]);
+        // 틀린 _meta 도메인은 isError, 틀린 머리글은 400.
+        let r = keys_call(
+            &c,
+            &url,
+            &sid,
+            5,
+            json!({"kr.pes/domain": "bad domain"}),
+            &[],
+            0,
+        )
+        .await;
+        assert_eq!(r["isError"], true);
+        let r = post(&c, &url, json!({"jsonrpc":"2.0","id":6,"method":"ping"}))
+            .header(SESSION_HEADER, &sid)
+            .header("x-api-domain", "ftp://x.kr")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 400);
+    }
+
+    #[tokio::test]
+    async fn http_concurrent_calls_keep_their_own_domain() {
+        let url = start_env_domain(vec![]).await;
+        let c = client();
+        let sid = init(&c, &url, None).await;
+        let mut tasks = Vec::new();
+        for i in 0..8u64 {
+            let (c, url, sid) = (c.clone(), url.clone(), sid.clone());
+            tasks.push(tokio::spawn(async move {
+                let d = format!("https://d{i}.example");
+                let k = format!("KEY{i}AAAAAAAAAAAAAAAA");
+                // 늦게 시작한 호출이 먼저 끝나도록 잠 시간을 엇갈리게.
+                let r = keys_call(
+                    &c,
+                    &url,
+                    &sid,
+                    100 + i,
+                    json!({"kr.pes/keys": [k], "kr.pes/domain": d}),
+                    &[],
+                    200 - i * 20,
+                )
+                .await;
+                (d, domains_of(&r))
+            }));
+        }
+        for t in tasks {
+            let (d, got) = t.await.unwrap();
+            assert_eq!(got, vec![json!(d)]);
+        }
     }
 }

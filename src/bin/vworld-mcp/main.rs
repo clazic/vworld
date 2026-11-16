@@ -400,14 +400,18 @@ impl Server {
         self.st.defaults.iter().map(|a| a.key.clone()).collect()
     }
 
-    /// 이번 요청의 키(요청별 `_meta` 우선, 없으면 기본 키).
+    /// 이번 요청의 키(요청별 `_meta` 우선, 없으면 기본 키)와 도메인.
+    ///
+    /// `_meta["kr.pes/domain"]` 이 있으면 이 호출의 모든 VWorld 요청에 그 domain 을 쓴다
+    /// (`VWORLD_DOMAIN`·설정 파일보다 우선). 목록은 호출마다 새로 만들어 동시 호출끼리 섞이지 않는다.
     fn keys(&self, ctx: &RequestContext<RoleServer>) -> Result<Vec<Auth>, String> {
-        mcp::select_auths(
+        let domain = mcp::select_domain(ctx.meta.get(mcp::META_DOMAIN))?;
+        let (auths, _) = mcp::select_auths(
             ctx.meta.get(META_KEYS),
             &self.st.defaults,
             self.st.domain.as_deref(),
-        )
-        .map(|(a, _)| a)
+        )?;
+        Ok(mcp::with_domain(auths, domain.as_deref()))
     }
 
     /// 결과를 텍스트로 만들고, 요청 키·기본 키를 지운 뒤 크기를 제한한다.
@@ -790,6 +794,13 @@ struct TagArgs {
 }
 
 #[cfg(test)]
+#[derive(Deserialize, schemars::JsonSchema)]
+#[schemars(crate = "rmcp::schemars")]
+struct SleepArgs {
+    sleep_ms: Option<u64>,
+}
+
+#[cfg(test)]
 #[tool_router(router = test_router)]
 impl Server {
     #[tool(description = "시험용: 진행 알림 뒤 30초 잠")]
@@ -808,10 +819,18 @@ impl Server {
         .await
     }
 
-    #[tool(description = "시험용: 이번 요청에 쓰일 키를 그대로 돌려줌(응답은 스크럽됨)")]
-    async fn test_keys(&self, ctx: RequestContext<RoleServer>) -> CallToolResult {
+    #[tool(description = "시험용: 이번 요청에 쓰일 키·도메인을 그대로 돌려줌(키는 스크럽됨)")]
+    async fn test_keys(
+        &self,
+        Parameters(a): Parameters<SleepArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> CallToolResult {
         self.keyed(&ctx, |_st, k, _p| async move {
-            Ok(serde_json::json!({"keys": k.iter().map(|a| a.key.clone()).collect::<Vec<_>>()}))
+            tokio::time::sleep(Duration::from_millis(a.sleep_ms.unwrap_or(0))).await;
+            Ok(serde_json::json!({
+                "keys": k.iter().map(|a| a.key.clone()).collect::<Vec<_>>(),
+                "domains": k.iter().map(|a| a.domain.clone()).collect::<Vec<_>>(),
+            }))
         })
         .await
     }

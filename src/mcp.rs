@@ -24,6 +24,8 @@ use std::time::{Duration, Instant};
 
 /// 요청별 키가 담기는 `_meta` 항목 이름.
 pub const META_KEYS: &str = "kr.pes/keys";
+/// 요청별 VWorld `domain`(도메인 등록 키)이 담기는 `_meta` 항목 이름.
+pub const META_DOMAIN: &str = "kr.pes/domain";
 /// 도구 결과 텍스트 상한(바이트). 넘으면 잘라내고 안내를 붙인다.
 pub const MAX_OUTPUT: usize = 200 * 1024;
 /// 키가 하나도 없을 때의 안내.
@@ -174,6 +176,61 @@ pub fn scrub(text: &str, secrets: &[&str]) -> String {
         }
     }
     out
+}
+
+/// 도메인 값 검사: `http(s)://호스트[:포트][/경로]` 또는 맨 호스트, 200자 이하, 공백·제어문자 없음.
+pub fn check_domain(d: &str) -> std::result::Result<(), String> {
+    let bad =
+        || "domain 은 http(s) URL 이나 호스트 이름이어야 해요(200자 이하, 공백 없이)".to_string();
+    if d.is_empty() || d.len() > 200 || d.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(bad());
+    }
+    let rest = d
+        .strip_prefix("https://")
+        .or_else(|| d.strip_prefix("http://"))
+        .unwrap_or(d);
+    if d.contains("://") && rest.len() == d.len() {
+        return Err(bad()); // http(s) 아닌 스킴
+    }
+    let host_port = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_ok = !host_port.is_empty()
+        && host_port
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || ".-_:[]".contains(c))
+        && !host_port.starts_with(['.', '-', ':']);
+    let tail_ok = rest[host_port.len()..]
+        .chars()
+        .all(|c| c.is_ascii_graphic() && !"<>\"\\^`{|}".contains(c));
+    // 맨 호스트는 경로 없이.
+    let bare_ok = d.contains("://") || host_port.len() == rest.len();
+    if host_ok && tail_ok && bare_ok {
+        Ok(())
+    } else {
+        Err(bad())
+    }
+}
+
+/// 요청별 도메인: `_meta["kr.pes/domain"]`. 없으면 None, 있는데 틀리면 오류.
+pub fn select_domain(meta_domain: Option<&Value>) -> std::result::Result<Option<String>, String> {
+    match meta_domain {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => {
+            let s = s.trim();
+            check_domain(s)?;
+            Ok(Some(s.to_string()))
+        }
+        Some(_) => Err(format!("_meta[\"{META_DOMAIN}\"] 는 문자열이어야 해요")),
+    }
+}
+
+/// 이번 호출의 키 목록에 요청별 도메인을 덮어쓴다(호출마다 따로 만든 목록이라 다른 호출과 섞이지 않음).
+pub fn with_domain(mut auths: Vec<Auth>, domain: Option<&str>) -> Vec<Auth> {
+    if let Some(d) = domain {
+        for a in &mut auths {
+            a.domain = Some(d.to_string());
+        }
+    }
+    auths
 }
 
 /// 쿼리 문자열식 퍼센트 인코딩(영숫자·`-_.~` 외 전부) — 스크럽 대조용.
@@ -1168,6 +1225,53 @@ mod tests {
         let err = select_auths(Some(&json!(["bad key with space"])), &[], None).unwrap_err();
         assert!(!err.contains("bad key"), "{err}");
         assert!(select_auths(Some(&json!([1])), &[], None).is_err());
+    }
+
+    #[test]
+    fn domain_validation_and_override() {
+        for ok in [
+            "https://pes.uri-jylee.workers.dev",
+            "http://localhost:8787",
+            "pes.example.kr",
+            "https://a.kr/path?x=1",
+        ] {
+            assert!(check_domain(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "has space.kr",
+            "ftp://x.kr",
+            "https://",
+            "a.kr/path",
+            &"a".repeat(201),
+            "https://x.kr/\n",
+            "-x.kr",
+        ] {
+            assert!(check_domain(bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(select_domain(None).unwrap(), None);
+        assert_eq!(
+            select_domain(Some(&json!(" https://d.kr ")))
+                .unwrap()
+                .as_deref(),
+            Some("https://d.kr")
+        );
+        assert!(select_domain(Some(&json!(5))).is_err());
+        assert!(select_domain(Some(&json!("bad domain"))).is_err());
+        let base = vec![Auth {
+            key: K1.into(),
+            domain: Some("https://env.kr".into()),
+        }];
+        assert_eq!(
+            with_domain(base.clone(), None)[0].domain.as_deref(),
+            Some("https://env.kr")
+        );
+        assert_eq!(
+            with_domain(base, Some("https://req.kr"))[0]
+                .domain
+                .as_deref(),
+            Some("https://req.kr")
+        );
     }
 
     #[test]
