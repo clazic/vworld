@@ -7,6 +7,7 @@
 //! - 세션 id 는 바깥에 256bit 무작위 값을 따로 내주고 rmcp 세션 id 와 짝지어 둔다(1시간 미사용 시 버림).
 //! - `MCP-Protocol-Version` 이 모르는 값이면 400.
 //! - `X-Api-Keys` 머리글 → 그 요청의 tools/call `_meta["kr.pes/keys"]` 로 넣는다.
+//!   (그 키로 VWorld 를 부르면 도구 결과 `_meta["kr.pes/key-usage"]` 에 키별 횟수가 붙는다 — JSON · SSE 같음.)
 //! - 응답: 진행 알림이 먼저 나오면 SSE(알림들 → 응답), 아니면 application/json. 모든 데이터는 키 스크럽.
 //! - SSE 연결이 응답 전에 끊기면 그 요청을 취소(`notifications/cancelled`)로 돌린다.
 //! - 접근 기록(stderr)은 메서드 · 도구 이름 · 걸린 시간만.
@@ -472,8 +473,13 @@ impl Gateway {
                     .filter(|k| !k.is_empty())
                     .map(|k| Value::String(k.to_string()))
                     .collect();
-                match mcp::select_auths(Some(&Value::Array(list)), &[], None) {
-                    Ok((a, _)) => a.into_iter().map(|a| a.key).collect(),
+                match mcp::select_auths(Some(&Value::Array(list.clone())), &[], None) {
+                    // 받은 순서 그대로 넘긴다(겹친 키도) — 사용량 보고(`kr.pes/key-usage`)의
+                    // 자리 번호가 머리글의 자리와 맞아야 한다. 겹친 키는 도구 쪽에서 한 번만 쓴다.
+                    Ok(_) => list
+                        .iter()
+                        .filter_map(|k| k.as_str().map(str::to_string))
+                        .collect(),
                     Err(e) => {
                         let e = e.replace("_meta[\"kr.pes/keys\"]", "X-Api-Keys");
                         return (
@@ -1712,5 +1718,427 @@ mod tests {
             let (d, got) = t.await.unwrap();
             assert_eq!(got, vec![json!(d)]);
         }
+    }
+
+    // ── 키별 사용량(`_meta["kr.pes/key-usage"]`) — VWorld 흉내 서버(mockito) ──
+
+    use mockito::Matcher;
+
+    const USAGE: &str = "kr.pes/key-usage";
+    const GEO_OK: &str = r#"{"response":{"status":"OK","result":{"crs":"EPSG:4326","point":{"x":"126.978","y":"37.566"}}}}"#;
+    const GEO_NONE: &str = r#"{"response":{"status":"NOT_FOUND"}}"#;
+
+    fn key_is(k: &str) -> Matcher {
+        Matcher::UrlEncoded("key".into(), k.into())
+    }
+
+    /// VWorld 대신 `upstream` 으로 나가는 서버.
+    async fn start_upstream(defaults: Vec<&str>, upstream: &str) -> String {
+        let defaults = defaults
+            .into_iter()
+            .map(|k| Auth {
+                key: k.into(),
+                domain: None,
+            })
+            .collect();
+        let server = Server::new(defaults, None)
+            .unwrap()
+            .with_client(vworld::api::Client::new().unwrap().with_upstream(upstream))
+            .with_store(test_store());
+        let opts = Options {
+            addr: "127.0.0.1:0".into(),
+            token: None,
+            allowed_origins: vec![],
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        tokio::spawn(run_listener(listener, Gateway::new(server, &opts, true)));
+        url
+    }
+
+    /// tools/call 한 번 → (result, 응답 본문 원문).
+    #[allow(clippy::too_many_arguments)]
+    async fn tool_call(
+        c: &reqwest::Client,
+        url: &str,
+        sid: &str,
+        id: u64,
+        name: &str,
+        args: Value,
+        meta: Value,
+        headers: &[(&str, &str)],
+    ) -> (Value, String) {
+        let mut rb = post(
+            c,
+            url,
+            json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{
+                "name":name,"arguments":args,"_meta":meta}}),
+        )
+        .header(SESSION_HEADER, sid);
+        for (k, v) in headers {
+            rb = rb.header(*k, *v);
+        }
+        let r = rb.send().await.unwrap();
+        assert_eq!(r.status(), 200);
+        let is_sse = r.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/event-stream");
+        let body = r.text().await.unwrap();
+        let v: Value = if is_sse {
+            sse_data(&body).pop().expect("SSE 응답")
+        } else {
+            serde_json::from_str(&body).unwrap()
+        };
+        assert_eq!(v["id"], id, "{v}");
+        (v["result"].clone(), body)
+    }
+
+    #[tokio::test]
+    async fn http_key_usage_counts_calls_per_request_key() {
+        const K: &str = "USAGEKEY01-AAAA-BBBB-CCCC-DDDD0001";
+        let mut up = mockito::Server::new_async().await;
+        // 도로명은 결과 없음 → 지번으로 다시(요청 2번, 실패 0).
+        let road = up
+            .mock("GET", "/req/address")
+            .match_query(Matcher::AllOf(vec![
+                key_is(K),
+                Matcher::UrlEncoded("type".into(), "ROAD".into()),
+            ]))
+            .with_body(GEO_NONE)
+            .expect(2)
+            .create_async()
+            .await;
+        let parcel = up
+            .mock("GET", "/req/address")
+            .match_query(Matcher::AllOf(vec![
+                key_is(K),
+                Matcher::UrlEncoded("type".into(), "PARCEL".into()),
+            ]))
+            .with_body(GEO_OK)
+            .expect(2)
+            .create_async()
+            .await;
+        let url = start_upstream(vec![], &up.url()).await;
+        let c = client();
+        let sid = init(&c, &url, None).await;
+        let want = json!([{"i": 0, "calls": 2, "errors": 0, "limited": 0}]);
+        // ① _meta["kr.pes/keys"]
+        let (res, body) = tool_call(
+            &c,
+            &url,
+            &sid,
+            2,
+            "vworld_geocode",
+            json!({"address": "세종로 1-68"}),
+            json!({"kr.pes/keys": [K]}),
+            &[],
+        )
+        .await;
+        assert_ne!(res["isError"], true, "{res}");
+        assert_eq!(res["_meta"][USAGE], want, "{res}");
+        assert!(res["content"][0]["text"].is_string());
+        assert!(!body.contains(K) && !body.contains(&K[K.len() - 4..]), "{body}");
+        // ② X-Api-Keys 머리글도 같다.
+        let (res, body) = tool_call(
+            &c,
+            &url,
+            &sid,
+            3,
+            "vworld_geocode",
+            json!({"address": "세종로 1-68"}),
+            json!({}),
+            &[("x-api-keys", K)],
+        )
+        .await;
+        assert_eq!(res["_meta"][USAGE], want, "{res}");
+        assert!(!body.contains(K), "{body}");
+        road.assert_async().await;
+        parcel.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn http_key_usage_absent_for_default_keys_and_without_upstream_calls() {
+        const DEFK: &str = "USAGEDEF02-AAAA-BBBB-CCCC-DDDD0002";
+        const REQK: &str = "USAGEREQ02-AAAA-BBBB-CCCC-DDDD0002";
+        let mut up = mockito::Server::new_async().await;
+        let m = up
+            .mock("GET", "/req/address")
+            .match_query(key_is(DEFK))
+            .with_body(GEO_OK)
+            .expect(1)
+            .create_async()
+            .await;
+        let url = start_upstream(vec![DEFK], &up.url()).await;
+        let c = client();
+        let sid = init(&c, &url, None).await;
+        // 기본 키로 부른 호출: 사용량 항목 없음.
+        let (res, body) = tool_call(
+            &c,
+            &url,
+            &sid,
+            2,
+            "vworld_geocode",
+            json!({"address": "세종대로 110", "type": "ROAD"}),
+            json!({}),
+            &[],
+        )
+        .await;
+        assert_ne!(res["isError"], true, "{res}");
+        assert!(res.get("_meta").is_none(), "{res}");
+        assert!(!body.contains(USAGE) && !body.contains(DEFK), "{body}");
+        m.assert_async().await;
+        // 요청별 키가 있어도 VWorld 를 안 부르면(검증 오류 · 저장된 결과 쪽 넘김) 항목 없음.
+        let (res, _) = tool_call(
+            &c,
+            &url,
+            &sid,
+            3,
+            "vworld_zoning",
+            json!({"x": 500.0, "y": 500.0}),
+            json!({"kr.pes/keys": [REQK]}),
+            &[],
+        )
+        .await;
+        assert_eq!(res["isError"], true);
+        assert!(res.get("_meta").is_none(), "{res}");
+        let (res, _) = tool_call(
+            &c,
+            &url,
+            &sid,
+            4,
+            "vworld_result_page",
+            json!({"cursor": "nope"}),
+            json!({}),
+            &[("x-api-keys", REQK)],
+        )
+        .await;
+        assert!(res.get("_meta").is_none(), "{res}");
+    }
+
+    #[tokio::test]
+    async fn http_key_usage_counts_errors_limits_and_keeps_received_index() {
+        const L1: &str = "USAGELIM03-AAAA-BBBB-CCCC-DDDD0031";
+        const L2: &str = "USAGELIM03-AAAA-BBBB-CCCC-DDDD0032";
+        const BAD: &str = "USAGEBAD03-AAAA-BBBB-CCCC-DDDD0033";
+        const OVER: &str = "USAGEOVR03-AAAA-BBBB-CCCC-DDDD0034";
+        const FLAKY: &str = "USAGEFLK03-AAAA-BBBB-CCCC-DDDD0035";
+        let mut up = mockito::Server::new_async().await;
+        for k in [L1, L2] {
+            up.mock("GET", "/req/address")
+                .match_query(key_is(k))
+                .with_status(429)
+                .with_header("retry-after", "0")
+                .create_async()
+                .await;
+        }
+        up.mock("GET", "/req/address")
+            .match_query(key_is(BAD))
+            .with_body(r#"{"response":{"status":"ERROR","error":{"level":"2","code":"INCORRECT_KEY","text":"인증키 정보가 올바르지 않습니다."}}}"#)
+            .create_async()
+            .await;
+        up.mock("GET", "/req/address")
+            .match_query(key_is(OVER))
+            .with_body(r#"{"response":{"status":"ERROR","error":{"level":"3","code":"OVER_REQUEST_LIMIT","text":"일일 제한량을 초과했습니다."}}}"#)
+            .create_async()
+            .await;
+        // 처음 한 번은 500, 다음은 정상(같은 키로 다시 시도).
+        up.mock("GET", "/req/address")
+            .match_query(key_is(FLAKY))
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+        up.mock("GET", "/req/address")
+            .match_query(key_is(FLAKY))
+            .with_body(GEO_OK)
+            .create_async()
+            .await;
+        let url = start_upstream(vec![], &up.url()).await;
+        let c = client();
+        let sid = init(&c, &url, None).await;
+        let args = json!({"address": "세종대로 110", "type": "ROAD"});
+
+        // 두 키 모두 429: 키마다 4번(처음 + 다시 3번) 보내고 모두 한도 초과. 겹친 키(L1 두 번) 뒤의
+        // L2 는 받은 목록의 자리 2 로 나온다. 오류 결과에도 붙는다.
+        let hdr = format!("{L1}, {L1} ,{L2}");
+        let (res, body) = tool_call(
+            &c,
+            &url,
+            &sid,
+            2,
+            "vworld_geocode",
+            args.clone(),
+            json!({}),
+            &[("x-api-keys", &hdr)],
+        )
+        .await;
+        assert_eq!(res["isError"], true, "{res}");
+        assert_eq!(
+            res["_meta"][USAGE],
+            json!([
+                {"i": 0, "calls": 4, "errors": 4, "limited": 4},
+                {"i": 2, "calls": 4, "errors": 4, "limited": 4},
+            ]),
+            "{res}"
+        );
+        assert!(!body.contains(L1) && !body.contains(L2), "{body}");
+
+        // VWorld 오류 본문(HTTP 200): 실패 1, 한도 아님.
+        let (res, body) = tool_call(
+            &c,
+            &url,
+            &sid,
+            3,
+            "vworld_geocode",
+            args.clone(),
+            json!({"kr.pes/keys": [BAD]}),
+            &[],
+        )
+        .await;
+        assert_eq!(res["isError"], true, "{res}");
+        assert!(res["content"][0]["text"].as_str().unwrap().contains("INCORRECT_KEY"));
+        assert_eq!(
+            res["_meta"][USAGE],
+            json!([{"i": 0, "calls": 1, "errors": 1, "limited": 0}])
+        );
+        assert!(!body.contains(BAD), "{body}");
+
+        // 사용량 초과 오류 본문: 한도 초과로도 센다.
+        let (res, _) = tool_call(
+            &c,
+            &url,
+            &sid,
+            4,
+            "vworld_geocode",
+            args.clone(),
+            json!({"kr.pes/keys": [OVER]}),
+            &[],
+        )
+        .await;
+        assert_eq!(
+            res["_meta"][USAGE],
+            json!([{"i": 0, "calls": 1, "errors": 1, "limited": 1}])
+        );
+
+        // 500 뒤 다시 시도해 성공: 요청 2, 실패 1 — 성공 결과에 붙는다.
+        let (res, _) = tool_call(
+            &c,
+            &url,
+            &sid,
+            5,
+            "vworld_geocode",
+            args,
+            json!({"kr.pes/keys": [FLAKY]}),
+            &[],
+        )
+        .await;
+        assert_ne!(res["isError"], true, "{res}");
+        assert_eq!(
+            res["_meta"][USAGE],
+            json!([{"i": 0, "calls": 2, "errors": 1, "limited": 0}])
+        );
+    }
+
+    #[tokio::test]
+    async fn http_key_usage_on_sse_and_large_results() {
+        const K: &str = "USAGESSE04-AAAA-BBBB-CCCC-DDDD0004";
+        let mut up = mockito::Server::new_async().await;
+        // 큰 결과: 지형 1000개(도형 포함) — 200KB 를 넘어 첫 쪽 + next_cursor + 파일로 나간다.
+        let big: Vec<Value> = (0..1000)
+            .map(|i| json!({"type": "Feature",
+                "geometry": {"type": "Polygon", "coordinates": [[[127.0, 37.5], [127.001, 37.5], [127.001, 37.501], [127.0, 37.5]]]},
+                "properties": {"pnu": format!("{:019}", i), "addr": "서울특별시 중구 태평로1가 31번지 일대 시험용 주소",
+                    "jibun": format!("{i}대"), "memo": format!("{i:0400}")}}))
+            .collect();
+        let data_body = json!({"response": {"status": "OK", "record": {"total": "1000", "current": "1000"},
+            "page": {"total": "1", "current": "1", "size": "1000"},
+            "result": {"featureCollection": {"type": "FeatureCollection", "features": big}}}})
+        .to_string();
+        assert!(data_body.len() > mcp::MAX_OUTPUT);
+        let data = up
+            .mock("GET", "/req/data")
+            .match_query(key_is(K))
+            .with_body(&data_body)
+            .expect(2)
+            .create_async()
+            .await;
+        let land = up
+            .mock("GET", "/ned/data/getLandUseAttr")
+            .match_query(key_is(K))
+            .with_body(r#"{"landUses":{"field":[{"prposAreaDstrcCodeNm":"일반상업지역","cnflcAtNm":"포함"}],"totalCount":"1"}}"#)
+            .expect(1)
+            .create_async()
+            .await;
+        let url = start_upstream(vec![], &up.url()).await;
+        let c = client();
+        let sid = init(&c, &url, None).await;
+
+        // 큰 결과(첫 쪽 + next_cursor + resource_link) 옆에도 사용량이 붙는다.
+        let (res, body) = tool_call(
+            &c,
+            &url,
+            &sid,
+            2,
+            "vworld_data",
+            json!({"data_id": "LP_PA_CBND_BUBUN", "geom_filter": "BOX(126.97,37.56,126.98,37.57)", "size": 1000}),
+            json!({"kr.pes/keys": [K]}),
+            &[],
+        )
+        .await;
+        assert_ne!(res["isError"], true, "{res}");
+        let first: Value =
+            serde_json::from_str(res["content"][0]["text"].as_str().unwrap()).unwrap();
+        let cursor = first["next_cursor"].as_str().expect("큰 결과 경로").to_string();
+        assert_eq!(
+            res["_meta"][USAGE],
+            json!([{"i": 0, "calls": 1, "errors": 0, "limited": 0}])
+        );
+        assert!(!body.contains(K), "큰 결과에도 키 없음");
+        // 저장된 결과의 다음 쪽: VWorld 를 부르지 않으니 항목 없음.
+        let (res, _) = tool_call(
+            &c,
+            &url,
+            &sid,
+            3,
+            "vworld_result_page",
+            json!({"cursor": cursor}),
+            json!({"kr.pes/keys": [K]}),
+            &[],
+        )
+        .await;
+        assert_ne!(res["isError"], true, "{res}");
+        assert!(res.get("_meta").is_none(), "{res}");
+
+        // SSE(진행 알림 → 응답): 필지 조회 1 + 토지이용계획 1.
+        let r = post(
+            &c,
+            &url,
+            json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{
+                "name":"vworld_zoning","arguments":{"x":126.978,"y":37.566},
+                "_meta":{"progressToken":"p-4","kr.pes/keys":[K]}}}),
+        )
+        .header(SESSION_HEADER, &sid)
+        .send()
+        .await
+        .unwrap();
+        assert!(r.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/event-stream"));
+        let body = r.text().await.unwrap();
+        let events = sse_data(&body);
+        assert_eq!(events[0]["method"], "notifications/progress");
+        let last = events.last().unwrap();
+        assert_eq!(last["id"], 4);
+        assert_ne!(last["result"]["isError"], true, "{last}");
+        assert_eq!(
+            last["result"]["_meta"][USAGE],
+            json!([{"i": 0, "calls": 2, "errors": 0, "limited": 0}]),
+            "{last}"
+        );
+        assert!(!body.contains(K), "SSE 에도 키 없음");
+        data.assert_async().await;
+        land.assert_async().await;
     }
 }

@@ -3,7 +3,7 @@
 pub mod normalize;
 
 use crate::concurrency::retry::{classify_reqwest, parse_retry_after, RateLimited, RetryPolicy};
-use crate::concurrency::FailKind;
+use crate::concurrency::{FailKind, KeyUsage};
 use crate::relay::{Relay, RelayError};
 use anyhow::{anyhow, Result};
 use std::time::Duration;
@@ -216,7 +216,14 @@ pub struct Client {
     inner: reqwest::Client,
     /// PES 중계 모드(`vworld` CLI 전용). Some이면 모든 요청이 중계 주소로 나간다.
     relay: Option<std::sync::Arc<Relay>>,
+    /// 키별 사용량 세기(`vworld-mcp` 의 요청별 키 호출 전용). None 이면 세지 않는다.
+    usage: Option<std::sync::Arc<KeyUsage>>,
+    /// VWorld 호스트(`https://api.vworld.kr`) 대신 쓸 주소 — 시험용 흉내 서버.
+    upstream: Option<std::sync::Arc<str>>,
 }
+
+/// VWorld API 호스트(스킴 포함).
+const API_ORIGIN: &str = "https://api.vworld.kr";
 
 /// 중계 모드에서 따라갈 넘김(3xx) 횟수 상한(reqwest 기본값과 같음).
 const MAX_RELAY_REDIRECTS: u32 = 10;
@@ -237,7 +244,7 @@ impl Client {
             .connect_timeout(Duration::from_secs(10))
             .user_agent("vworld-cli/0.1")
             .build()?;
-        Ok(Client { inner, relay: None })
+        Ok(Client { inner, relay: None, usage: None, upstream: None })
     }
 
     /// `vworld` CLI용 클라이언트 — `PES_RELAY_URL` 이 있으면 중계 모드, 없으면 `new()`와 같다.
@@ -261,7 +268,29 @@ impl Client {
             .redirect(reqwest::redirect::Policy::none())
             .no_proxy()
             .build()?;
-        Ok(Client { inner, relay: Some(std::sync::Arc::new(relay)) })
+        Ok(Client { inner, relay: Some(std::sync::Arc::new(relay)), usage: None, upstream: None })
+    }
+
+    /// 이 호출 동안 키별 사용량을 `usage` 에 세는 사본(연결 풀은 함께 쓴다).
+    pub fn with_usage(&self, usage: std::sync::Arc<KeyUsage>) -> Self {
+        let mut c = self.clone();
+        c.usage = Some(usage);
+        c
+    }
+
+    /// 시험용: `https://api.vworld.kr` 로 갈 요청을 `base`(흉내 서버)로 보낸다.
+    #[doc(hidden)]
+    pub fn with_upstream(mut self, base: &str) -> Self {
+        self.upstream = Some(base.trim_end_matches('/').into());
+        self
+    }
+
+    /// HTTP 200 으로 받은 본문이 오류였다(VWorld 오류 본문 · 읽기 실패) — 사용량에 실패로 센다.
+    /// `limited` 는 사용량 초과 오류일 때.
+    pub fn note_body_error(&self, key: &str, limited: bool) {
+        if let Some(u) = &self.usage {
+            u.record_error(key, limited);
+        }
     }
 
     /// 인증 파라미터(key/domain)를 주입.
@@ -274,19 +303,26 @@ impl Client {
     }
 
     /// 재시도 포함 GET 코어. `referer`가 Some이면 헤더 주입.
+    /// `key` 는 이 요청에 실린 키(사용량 세기용 — 키가 경로에 든 요청은 None, 세지 않는다).
     async fn send_retry(
         &self,
         url: &str,
         params: &[(String, String)],
         referer: Option<&str>,
+        key: Option<&str>,
     ) -> Result<reqwest::Response> {
+        // 사용량: 실제로 보낸 요청마다(재시도 포함) 한 번씩 센다.
+        let usage = self.usage.as_deref().zip(key);
         let policy = RetryPolicy::default();
         let mut attempt = 0u32;
         // 중계 모드: 주소를 중계 주소로 바꾼다(유일한 길목). 넘김을 받으면 `target` 이 바뀐다.
         let relay = self.relay.as_deref();
         let mut target = match relay {
             Some(r) => r.wrap(url)?,
-            None => url.to_string(),
+            None => match (&self.upstream, url.strip_prefix(API_ORIGIN)) {
+                (Some(base), Some(rest)) => format!("{base}{rest}"),
+                _ => url.to_string(),
+            },
         };
         let mut query: &[(String, String)] = params;
         let mut redirects = 0u32;
@@ -304,9 +340,17 @@ impl Client {
             if let Some(r) = relay {
                 req = req.header(crate::relay::TOKEN_HEADER, &r.token);
             }
+            if let Some((u, k)) = usage {
+                u.record_call(k);
+            }
             match req.send().await {
                 Ok(resp) => {
                     let status = resp.status();
+                    if let Some((u, k)) = usage {
+                        if status.is_client_error() || status.is_server_error() {
+                            u.record_error(k, status.as_u16() == 429);
+                        }
+                    }
                     if let Some(r) = relay {
                         // 중계가 만든 오류(401 · 403 · 409)는 기관 응답이 아니다 — 글 그대로 보여 주고 끝.
                         if resp.headers().contains_key(crate::relay::ERROR_HEADER) {
@@ -357,6 +401,9 @@ impl Client {
                     return Err(anyhow!("HTTP {status}: {}", truncate(&body, 300)));
                 }
                 Err(e) => {
+                    if let Some((u, k)) = usage {
+                        u.record_error(k, false);
+                    }
                     if classify_reqwest(&e) == FailKind::Transient && attempt < policy.max_retry {
                         tokio::time::sleep(policy.backoff(attempt)).await;
                         attempt += 1;
@@ -372,13 +419,16 @@ impl Client {
     /// 텍스트(JSON/XML/HTML) 응답 GET — key/domain 주입 + Referer 헤더 + 재시도(§2.1.1-c).
     pub async fn get_text(&self, url: &str, params: Vec<(String, String)>, auth: &Auth) -> Result<String> {
         let params = Self::with_auth(params, auth);
-        let resp = self.send_retry(url, &params, auth.domain.as_deref()).await?;
-        Ok(resp.text().await.map_err(|e| e.without_url())?)
+        let resp = self.send_retry(url, &params, auth.domain.as_deref(), Some(&auth.key)).await?;
+        Ok(resp.text().await.map_err(|e| {
+            self.note_body_error(&auth.key, false);
+            e.without_url()
+        })?)
     }
 
     /// 인증 미주입 텍스트 GET — key가 경로에 포함된 타일 등에 사용.
     pub async fn get_text_plain(&self, url: &str) -> Result<String> {
-        let resp = self.send_retry(url, &[], None).await?;
+        let resp = self.send_retry(url, &[], None, None).await?;
         Ok(resp.text().await.map_err(|e| e.without_url())?)
     }
 
@@ -390,22 +440,32 @@ impl Client {
         key: &str,
     ) -> Result<String> {
         params.push(("apiKey".into(), key.to_string()));
-        let resp = self.send_retry(url, &params, None).await?;
-        Ok(resp.text().await.map_err(|e| e.without_url())?)
+        let resp = self.send_retry(url, &params, None, Some(key)).await?;
+        Ok(resp.text().await.map_err(|e| {
+            self.note_body_error(key, false);
+            e.without_url()
+        })?)
     }
 
     /// 바이트(이미지/타일) 응답 GET — key/domain 주입 + 재시도 + **본문 에러 검사**(§2.1.1-b).
     pub async fn get_bytes(&self, url: &str, params: Vec<(String, String)>, auth: &Auth) -> Result<Vec<u8>> {
         let params = Self::with_auth(params, auth);
-        let resp = self.send_retry(url, &params, auth.domain.as_deref()).await?;
-        let bytes = resp.bytes().await.map_err(|e| e.without_url())?.to_vec();
-        guard_image_error(&bytes)?;
+        let resp = self.send_retry(url, &params, auth.domain.as_deref(), Some(&auth.key)).await?;
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| {
+                self.note_body_error(&auth.key, false);
+                e.without_url()
+            })?
+            .to_vec();
+        guard_image_error(&bytes).inspect_err(|_| self.note_body_error(&auth.key, false))?;
         Ok(bytes)
     }
 
     /// 인증 미주입 바이트 GET(타일 — key 경로 포함) + 본문 에러 검사.
     pub async fn get_bytes_plain(&self, url: &str) -> Result<Vec<u8>> {
-        let resp = self.send_retry(url, &[], None).await?;
+        let resp = self.send_retry(url, &[], None, None).await?;
         let bytes = resp.bytes().await.map_err(|e| e.without_url())?.to_vec();
         guard_image_error(&bytes)?;
         Ok(bytes)

@@ -7,11 +7,14 @@
 //! 키 규칙(공통 규약 §3):
 //! - 기본 키: `VWORLD_API_KEYS`(쉼표 구분) + 선택 `VWORLD_DOMAIN`. 없으면 CLI 설정 파일(`~/.vworld/config.toml`).
 //! - 요청별 키: `params._meta["kr.pes/keys"]`(문자열 배열). 있으면 그 키만 쓰고 기본 키로 넘어가지 않는다.
+//! - 요청별 키로 실행한 호출은 키별 사용량([`KeyUsage`], 자리 번호와 횟수만)을 센다 — 도구 결과의
+//!   `_meta["kr.pes/key-usage"]` 로 나간다. 기본 키는 세지 않는다.
 //! - 모든 출력은 [`scrub`] 로 키 원문을 `***<끝4자리>` 로 바꾼다.
 
 use crate::api::normalize;
 use crate::api::{Auth, Client, NedBuilder, NedKind, QueryBuilder};
 use crate::concurrency::retry::RateLimited;
+use crate::concurrency::KeyUsage;
 use crate::config::{default_config_path, Config};
 use crate::{ned_registry, twod_registry};
 use anyhow::{anyhow, Result};
@@ -19,13 +22,15 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// 요청별 키가 담기는 `_meta` 항목 이름.
 pub const META_KEYS: &str = "kr.pes/keys";
 /// 요청별 VWorld `domain`(도메인 등록 키)이 담기는 `_meta` 항목 이름.
 pub const META_DOMAIN: &str = "kr.pes/domain";
+/// 도구 결과(`result._meta`)에 키별 사용량이 담기는 항목 이름.
+pub const META_KEY_USAGE: &str = "kr.pes/key-usage";
 /// 도구 결과 텍스트 상한(바이트). 넘으면 잘라내고 안내를 붙인다.
 pub const MAX_OUTPUT: usize = 200 * 1024;
 /// 키가 하나도 없을 때의 안내.
@@ -153,6 +158,29 @@ pub fn select_auths(
         }
         Some(_) => Err(format!("_meta[\"{META_KEYS}\"] 는 문자열 배열이어야 해요")),
     }
+}
+
+/// 요청별 키(`_meta["kr.pes/keys"]` 배열)로 실행할 때의 사용량 세기. 기본 키면 None.
+///
+/// 자리 번호는 받은 배열 그대로의 자리다(같은 키가 또 나오면 처음 나온 자리).
+pub fn request_usage(meta_keys: Option<&Value>) -> Option<Arc<KeyUsage>> {
+    let Some(Value::Array(items)) = meta_keys else {
+        return None;
+    };
+    let keys: Vec<&str> = items
+        .iter()
+        .map(|v| v.as_str().map(str::trim).unwrap_or(""))
+        .collect();
+    Some(Arc::new(KeyUsage::new(&keys)))
+}
+
+/// VWorld 오류 코드가 사용량(한도) 초과인지 — 예: `OVER_REQUEST_LIMIT`,
+/// `LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR`.
+pub fn is_quota_code(code: &str) -> bool {
+    let c = code.to_ascii_uppercase();
+    ["OVER_REQUEST", "LIMIT_EXCEED", "LIMITED_NUMBER", "QUOTA", "TOO_MANY"]
+        .iter()
+        .any(|p| c.contains(p))
 }
 
 /// 출력 텍스트에서 키 원문을 `***<끝4자리>` 로 바꾼다(긴 키부터, URL 인코딩 형태 포함).
@@ -447,12 +475,13 @@ fn check_lonlat(x: f64, y: f64) -> VResult {
 // ───────────────────────── 공용 호출 ─────────────────────────
 
 /// VWorld 텍스트 응답을 JSON 으로 정규화하고 본문 에러를 검사한다. "결과 없음"은 `Null`.
-fn normalize_body(body: &str) -> Result<Value> {
-    let v = normalize::parse_to_json(body)?;
+/// 실패면 (오류, 사용량 초과 여부).
+fn normalize_body(body: &str) -> std::result::Result<Value, (anyhow::Error, bool)> {
+    let v = normalize::parse_to_json(body).map_err(|e| (e, false))?;
     match normalize::check_body_error(&v) {
         Ok(()) => Ok(v),
         Err(e) if e.empty_ok => Ok(Value::Null),
-        Err(e) => Err(anyhow!("{e}")),
+        Err(e) => Err((anyhow!("{e}"), is_quota_code(&e.code))),
     }
 }
 
@@ -467,7 +496,11 @@ async fn fetch_json(
         let params = params.clone();
         async move {
             let body = client.get_text(&url, params, &a).await?;
-            normalize_body(&body)
+            normalize_body(&body).map_err(|(e, limited)| {
+                // HTTP 200 이지만 본문이 오류 — 그 키의 실패로 센다.
+                client.note_body_error(&a.key, limited);
+                e
+            })
         }
     })
     .await

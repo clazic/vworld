@@ -23,6 +23,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use vworld::api::{Auth, Client};
+use vworld::concurrency::KeyUsage;
 use vworld::mcp::{self, DataInput, KeySource, NedInput, SearchInput, META_KEYS};
 use vworld::mcp_results::{self, Format, Shape, Store};
 
@@ -395,6 +396,13 @@ impl Server {
         self
     }
 
+    /// 시험용: VWorld 대신 흉내 서버로 가는 클라이언트로 바꾼다.
+    #[cfg(test)]
+    pub(crate) fn with_client(mut self, client: Client) -> Self {
+        Arc::get_mut(&mut self.st).expect("생성 직후").client = client;
+        self
+    }
+
     /// 기본 키 원문(스크럽 대상) — HTTP 계층이 응답 전체를 지울 때 쓴다.
     pub(crate) fn default_secrets(&self) -> Vec<String> {
         self.st.defaults.iter().map(|a| a.key.clone()).collect()
@@ -404,18 +412,35 @@ impl Server {
     ///
     /// `_meta["kr.pes/domain"]` 이 있으면 이 호출의 모든 VWorld 요청에 그 domain 을 쓴다
     /// (`VWORLD_DOMAIN`·설정 파일보다 우선). 목록은 호출마다 새로 만들어 동시 호출끼리 섞이지 않는다.
-    fn keys(&self, ctx: &RequestContext<RoleServer>) -> Result<Vec<Auth>, String> {
+    ///
+    /// 요청별 키면 키별 사용량 세기(`KeyUsage`)도 함께 준다 — 기본 키면 None.
+    fn keys(
+        &self,
+        ctx: &RequestContext<RoleServer>,
+    ) -> Result<(Vec<Auth>, Option<Arc<KeyUsage>>), String> {
         let domain = mcp::select_domain(ctx.meta.get(mcp::META_DOMAIN))?;
-        let (auths, _) = mcp::select_auths(
-            ctx.meta.get(META_KEYS),
-            &self.st.defaults,
-            self.st.domain.as_deref(),
-        )?;
-        Ok(mcp::with_domain(auths, domain.as_deref()))
+        let meta_keys = ctx.meta.get(META_KEYS);
+        let (auths, per_request) =
+            mcp::select_auths(meta_keys, &self.st.defaults, self.st.domain.as_deref())?;
+        let usage = per_request
+            .then(|| mcp::request_usage(meta_keys))
+            .flatten();
+        Ok((mcp::with_domain(auths, domain.as_deref()), usage))
     }
 
     /// 결과를 텍스트로 만들고, 요청 키·기본 키를 지운 뒤 크기를 제한한다.
     fn finish<T: Into<Reply>>(&self, used: &[Auth], r: anyhow::Result<T>) -> CallToolResult {
+        self.finish_with(used, None, r)
+    }
+
+    /// [`Self::finish`] + 요청별 키로 VWorld 를 불렀으면 결과 `_meta["kr.pes/key-usage"]` 에
+    /// 키별 횟수(자리 번호 · calls · errors · limited)를 붙인다. 성공 · 오류 결과 모두. 키 값은 넣지 않는다.
+    fn finish_with<T: Into<Reply>>(
+        &self,
+        used: &[Auth],
+        usage: Option<&KeyUsage>,
+        r: anyhow::Result<T>,
+    ) -> CallToolResult {
         let secrets: Vec<&str> = used
             .iter()
             .chain(self.st.defaults.iter())
@@ -442,27 +467,43 @@ impl Server {
                 .into_iter()
                 .filter_map(|l| serde_json::from_value::<ContentBlock>(l).ok()),
         );
-        if ok {
+        let mut result = if ok {
             CallToolResult::success(content)
         } else {
             CallToolResult::error(content)
+        };
+        if let Some(report) = usage.and_then(KeyUsage::report) {
+            // 이미 있는 _meta 는 그대로 두고 항목만 더한다.
+            result
+                .meta
+                .get_or_insert_with(Default::default)
+                .insert(mcp::META_KEY_USAGE.to_string(), report);
         }
+        result
     }
 
     /// 키가 필요한 도구 공통: 키 선택 → [`Self::run`].
     async fn keyed<F, Fut, T>(&self, ctx: &RequestContext<RoleServer>, f: F) -> CallToolResult
     where
-        F: FnOnce(Arc<State>, Vec<Auth>, Reporter) -> Fut,
+        F: FnOnce(Client, Arc<State>, Vec<Auth>, Reporter) -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<T>>,
         T: Into<Reply>,
     {
-        let auths = match self.keys(ctx) {
+        let (auths, usage) = match self.keys(ctx) {
             Ok(a) => a,
             Err(e) => return self.finish(&[], Err::<Reply, _>(anyhow::anyhow!(e))),
         };
         let st = self.st.clone();
+        // 요청별 키면 이 호출만의 클라이언트 사본이 키별 횟수를 센다(연결 풀은 함께 쓴다).
+        let client = match &usage {
+            Some(u) => st.client.with_usage(u.clone()),
+            None => st.client.clone(),
+        };
         let used = auths.clone();
-        self.run(ctx, &used, move |rep| f(st, auths, rep)).await
+        self.run(ctx, &used, usage.as_deref(), move |rep| {
+            f(client, st, auths, rep)
+        })
+        .await
     }
 
     /// 실행 공통: 진행 알림 연결, 취소(`notifications/cancelled` · HTTP 연결 끊김) 시 작업 중단.
@@ -473,6 +514,7 @@ impl Server {
         &self,
         ctx: &RequestContext<RoleServer>,
         used: &[Auth],
+        usage: Option<&KeyUsage>,
         f: F,
     ) -> CallToolResult
     where
@@ -494,7 +536,7 @@ impl Server {
             }
         }
         match r {
-            Some(r) => self.finish(used, r),
+            Some(r) => self.finish_with(used, usage, r),
             None => {
                 let id = serde_json::to_string(&ctx.id).unwrap_or_default();
                 mark_cancelled(cancel_key(&session_of(ctx), &id));
@@ -521,8 +563,8 @@ impl Server {
     ) -> CallToolResult {
         let ty = a.r#type.unwrap_or_else(|| "auto".into());
         let crs = crs_or_4326(a.crs);
-        self.keyed(&ctx, |st, k, _p| async move {
-            mcp::geocode(&st.client, &k, &a.address, &ty, &crs).await
+        self.keyed(&ctx, |c, _st, k, _p| async move {
+            mcp::geocode(&c, &k, &a.address, &ty, &crs).await
         })
         .await
     }
@@ -538,8 +580,8 @@ impl Server {
     ) -> CallToolResult {
         let ty = a.r#type.unwrap_or_else(|| "BOTH".into());
         let crs = crs_or_4326(a.crs);
-        self.keyed(&ctx, |st, k, _p| async move {
-            mcp::reverse_geocode(&st.client, &k, a.x, a.y, &ty, &crs).await
+        self.keyed(&ctx, |c, _st, k, _p| async move {
+            mcp::reverse_geocode(&c, &k, a.x, a.y, &ty, &crs).await
         })
         .await
     }
@@ -562,8 +604,8 @@ impl Server {
             bbox: a.bbox,
             crs: crs_or_4326(a.crs),
         };
-        self.keyed(&ctx, |st, k, _p| async move {
-            mcp::search(&st.client, &k, &input).await
+        self.keyed(&ctx, |c, _st, k, _p| async move {
+            mcp::search(&c, &k, &input).await
         })
         .await
     }
@@ -614,9 +656,9 @@ impl Server {
             "attr_filter": input.attr_filter, "emd_cd": input.emd_cd, "columns": input.columns,
             "size": input.size, "page": input.page, "pages": input.pages, "crs": input.crs});
         let shape = a.shape.into_shape();
-        self.keyed(&ctx, |st, k, p| async move {
+        self.keyed(&ctx, |c, st, k, p| async move {
             let shape = shape?;
-            let out = mcp::data(&st.client, &k, &input, &*p).await?;
+            let out = mcp::data(&c, &k, &input, &*p).await?;
             let items = mcp::data_items(&out);
             mcp_results::shape_result(
                 &st.store,
@@ -640,8 +682,8 @@ impl Server {
         Parameters(a): Parameters<ZoningArgs>,
         ctx: RequestContext<RoleServer>,
     ) -> CallToolResult {
-        self.keyed(&ctx, |st, k, p| async move {
-            mcp::zoning(&st.client, &k, a.address.as_deref(), a.x, a.y, &*p).await
+        self.keyed(&ctx, |c, _st, k, p| async move {
+            mcp::zoning(&c, &k, a.address.as_deref(), a.x, a.y, &*p).await
         })
         .await
     }
@@ -680,9 +722,9 @@ impl Server {
         let summary = json!({"operation": input.operation, "pnu": input.pnu, "bbox": input.bbox,
             "crs": input.crs, "params": input.params});
         let shape = a.shape.into_shape();
-        self.keyed(&ctx, |st, k, p| async move {
+        self.keyed(&ctx, |c, st, k, p| async move {
             let shape = shape?;
-            let out = mcp::ned(&st.client, &k, &input, &*p).await?;
+            let out = mcp::ned(&c, &k, &input, &*p).await?;
             let items = mcp::ned_items(&out);
             mcp_results::shape_result(
                 &st.store,
@@ -707,7 +749,7 @@ impl Server {
         ctx: RequestContext<RoleServer>,
     ) -> CallToolResult {
         let st = self.st.clone();
-        self.run(&ctx, &[], move |_p| async move {
+        self.run(&ctx, &[], None, move |_p| async move {
             mcp_results::result_page(&st.store, &a.cursor, a.limit.map(|l| l as usize))
         })
         .await
@@ -809,7 +851,7 @@ impl Server {
         Parameters(a): Parameters<TagArgs>,
         ctx: RequestContext<RoleServer>,
     ) -> CallToolResult {
-        self.run(&ctx, &[], |rep| async move {
+        self.run(&ctx, &[], None, |rep| async move {
             let mut flag = test_tools::AbortFlag(a.tag, false);
             rep(0, 2, "시작");
             tokio::time::sleep(Duration::from_secs(30)).await;
@@ -825,7 +867,7 @@ impl Server {
         Parameters(a): Parameters<SleepArgs>,
         ctx: RequestContext<RoleServer>,
     ) -> CallToolResult {
-        self.keyed(&ctx, |_st, k, _p| async move {
+        self.keyed(&ctx, |_c, _st, k, _p| async move {
             tokio::time::sleep(Duration::from_millis(a.sleep_ms.unwrap_or(0))).await;
             Ok(serde_json::json!({
                 "keys": k.iter().map(|a| a.key.clone()).collect::<Vec<_>>(),
@@ -858,7 +900,8 @@ const HELP: &str = "vworld-mcp — VWorld OpenAPI 읽기 전용 MCP 서버 (stdi
   VWORLD_DOMAIN                도메인 등록 키의 도메인(domain= 쿼리·Referer). 선택
   VWORLD_MCP_TOKEN             HTTP 모드 Bearer 토큰. loopback 이 아닌 주소에서는 필수
   VWORLD_MCP_ALLOWED_ORIGINS   HTTP 모드에서 허용할 Origin(쉼표). loopback 출처는 늘 허용
-요청별 키: tools/call 의 params._meta[\"kr.pes/keys\"] = [\"KEY\", ...], HTTP 는 X-Api-Keys: k1,k2 머리글도 됨";
+요청별 키: tools/call 의 params._meta[\"kr.pes/keys\"] = [\"KEY\", ...], HTTP 는 X-Api-Keys: k1,k2 머리글도 됨
+  (요청별 키로 실행하면 결과 _meta[\"kr.pes/key-usage\"] = [{i, calls, errors, limited}] 로 키별 요청 수를 알림)";
 
 /// stdio 전송 감싸개 — 취소된 요청의 응답은 내보내지 않는다(규격).
 struct CancelFilter<T>(T);
@@ -1070,5 +1113,133 @@ mod tests {
         );
         assert!(take_cancelled(&cancel_key("s1", "7")));
         assert!(!take_cancelled(&cancel_key("s1", "7")));
+    }
+
+    /// stdio(줄 단위 JSON-RPC)로 한 번 주고받기: `lines` 를 보내고 `id` 의 응답을 돌려준다.
+    async fn stdio_roundtrip(server: Server, lines: Vec<Value>, id: u64) -> Value {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let (client_io, server_io) = tokio::io::duplex(4 * 1024 * 1024);
+        let (srv_r, srv_w) = tokio::io::split(server_io);
+        tokio::spawn(async move {
+            let transport = CancelFilter(
+                rmcp::transport::async_rw::AsyncRwTransport::new_server(srv_r, srv_w),
+            );
+            if let Ok(running) = server.serve(transport).await {
+                let _ = running.waiting().await;
+            }
+        });
+        let (r, mut w) = tokio::io::split(client_io);
+        for l in lines {
+            w.write_all(format!("{l}\n").as_bytes()).await.unwrap();
+        }
+        w.flush().await.unwrap();
+        let mut reader = tokio::io::BufReader::new(r).lines();
+        loop {
+            let line = tokio::time::timeout(Duration::from_secs(20), reader.next_line())
+                .await
+                .expect("응답 시간 초과")
+                .unwrap()
+                .expect("연결이 먼저 끝남");
+            let v: Value = serde_json::from_str(&line).unwrap();
+            if v["id"] == id {
+                return v;
+            }
+        }
+    }
+
+    fn stdio_init() -> Vec<Value> {
+        vec![
+            json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+                "protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}),
+            json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        ]
+    }
+
+    #[tokio::test]
+    async fn stdio_key_usage_only_for_request_keys() {
+        use mockito::Matcher;
+        const REQ: &str = "STDIOREQ01-AAAA-BBBB-CCCC-DDDD9001";
+        const UNUSED: &str = "STDIOREQ01-AAAA-BBBB-CCCC-DDDD9002";
+        const DEF: &str = "STDIODEF01-AAAA-BBBB-CCCC-DDDD9003";
+        const OK: &str = r#"{"response":{"status":"OK","result":{"crs":"EPSG:4326","point":{"x":"126.978","y":"37.566"}}}}"#;
+        let mut up = mockito::Server::new_async().await;
+        for k in [REQ, DEF] {
+            up.mock("GET", "/req/address")
+                .match_query(Matcher::UrlEncoded("key".into(), k.into()))
+                .with_body(OK)
+                .create_async()
+                .await;
+        }
+        // UNUSED 는 쿨다운으로 뒤로 미뤄 두어, 두 키 중 REQ(자리 1)만 쓰이게 한다.
+        let _: anyhow::Result<()> = mcp::with_key(
+            &[Auth {
+                key: UNUSED.into(),
+                domain: None,
+            }],
+            |_| async {
+                Err(vworld::concurrency::retry::RateLimited {
+                    retry_after: Some(Duration::from_secs(30)),
+                }
+                .into())
+            },
+        )
+        .await;
+        let server = || {
+            Server::new(
+                vec![Auth {
+                    key: DEF.into(),
+                    domain: None,
+                }],
+                None,
+            )
+            .unwrap()
+            .with_client(Client::new().unwrap().with_upstream(&up.url()))
+        };
+        let call = |meta: Value| {
+            let mut lines = stdio_init();
+            lines.push(json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{
+                "name":"vworld_geocode","arguments":{"address":"세종대로 110","type":"ROAD"},"_meta":meta}}));
+            lines
+        };
+        // 요청별 키: 쓴 키(자리 1)만 나오고, 안 쓴 키(자리 0)는 빠진다.
+        let v = stdio_roundtrip(server(), call(json!({"kr.pes/keys": [UNUSED, REQ]})), 2).await;
+        assert_ne!(v["result"]["isError"], true, "{v}");
+        assert_eq!(
+            v["result"]["_meta"]["kr.pes/key-usage"],
+            json!([{"i": 1, "calls": 1, "errors": 0, "limited": 0}]),
+            "{v}"
+        );
+        assert!(v["result"]["content"][0]["text"].is_string());
+        let text = v.to_string();
+        assert!(!text.contains(REQ) && !text.contains(UNUSED), "{text}");
+        // 기본 키: 항목 없음.
+        let v = stdio_roundtrip(server(), call(json!({})), 2).await;
+        assert_ne!(v["result"]["isError"], true, "{v}");
+        assert!(v["result"].get("_meta").is_none(), "{v}");
+        assert!(!v.to_string().contains(DEF));
+    }
+
+    #[test]
+    fn finish_with_merges_usage_into_meta_without_key_text() {
+        const K: &str = "FINISHKEY1-AAAA-BBBB-CCCC-DDDD8001";
+        let s = Server::new(vec![], None).unwrap();
+        let used = [Auth {
+            key: K.into(),
+            domain: None,
+        }];
+        let usage = KeyUsage::new(&[K]);
+        // 요청을 안 보냈으면 _meta 자체가 없다.
+        let r = s.finish_with(&used, Some(&usage), Ok(json!({"a": 1})));
+        assert!(r.meta.is_none());
+        usage.record_call(K);
+        usage.record_error(K, true);
+        let r = s.finish_with(&used, Some(&usage), Err::<Value, _>(anyhow::anyhow!("실패")));
+        assert_eq!(r.is_error, Some(true));
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(
+            v["_meta"],
+            json!({"kr.pes/key-usage": [{"i": 0, "calls": 1, "errors": 1, "limited": 1}]})
+        );
+        assert!(!v.to_string().contains(K) && !v.to_string().contains("8001"));
     }
 }

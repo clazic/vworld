@@ -275,6 +275,18 @@ vworld-mcp --version
   "_meta":{"kr.pes/keys":["XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"]}}}
 ```
 
+**키별 사용량** — 요청별 키로 실행한 `tools/call` 은 도구 결과(`result`, `content`·`isError` 옆)의 `_meta["kr.pes/key-usage"]` 에 그 호출이 키마다 VWorld 로 보낸 요청 수를 붙입니다. 부르는 쪽이 키별 사용량을 셀 때 씁니다.
+
+```json
+{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"…"}],"isError":false,
+  "_meta":{"kr.pes/key-usage":[{"i":0,"calls":3,"errors":1,"limited":1},{"i":2,"calls":1,"errors":0,"limited":0}]}}}
+```
+
+- `i` — 받은 키 목록(`_meta["kr.pes/keys"]` 배열, 또는 `X-Api-Keys` 의 쉼표로 나눈 빈 칸 아닌 항목)에서의 자리(0부터). 같은 키가 또 나오면 처음 나온 자리로 셉니다.
+- `calls` — 그 키로 VWorld 에 보낸 HTTP 요청 수(다시 시도한 요청도 한 번씩). `errors` — 그중 실패(전송 오류 · HTTP 400 이상 · `INCORRECT_KEY` 같은 VWorld 오류 본문). `limited` — 그중 한도 초과(HTTP 429 · `OVER_REQUEST_LIMIT` 같은 사용량 초과 오류, `errors` 에 포함).
+- 한 번도 안 쓴 키는 빠지고, VWorld 를 부르지 않은 호출(오프라인 도구 · 인자 검증 오류 · `vworld_result_page`)에는 항목이 없습니다. 성공 · `isError: true` 결과 모두에 붙고, stdio · HTTP(JSON · SSE) · 큰 결과(첫 쪽 + `next_cursor`) 모두 같습니다.
+- 기본 키(`VWORLD_API_KEYS` · 설정 파일)로 실행한 호출에는 붙지 않습니다. 키 값은(일부도) 들어가지 않습니다 — 자리 번호와 횟수뿐입니다.
+
 **요청별 도메인** — 도메인 등록 키라면 `params._meta["kr.pes/domain"]` 에 등록한 도메인(예 `"https://pes.example.workers.dev"`)을 줍니다. 있으면 그 호출의 모든 VWorld 요청에 `domain=`·Referer 로 붙고 `VWORLD_DOMAIN`·설정 파일 값보다 우선합니다(동시 호출끼리 섞이지 않음). 없으면 `VWORLD_DOMAIN` → 설정 파일. 형식: `http(s)://` URL 또는 호스트 이름, 200자 이하, 공백 없음 — 틀리면 `isError`.
 
 키는 인자·로그·stderr·결과·오류 어디에도 원문으로 나오지 않습니다. 응답 직전 모든 텍스트에서 그 요청의 키와 기본 키를 `***<끝4자리>` 로 바꿉니다(단위 테스트로 확인). 파일 캐시는 없습니다.
@@ -291,7 +303,7 @@ VWORLD_MCP_TOKEN=$(openssl rand -hex 32) vworld-mcp --http 0.0.0.0:8080   # 바�
 - `Accept` 에 `text/event-stream` 이 있고 진행 알림이 나오는 요청은 SSE(알림들 → 마지막에 응답), 아니면 `application/json`.
 - `GET /mcp`(세션 머리글 + `Accept: text/event-stream`)는 서버 알림용 SSE 스트림입니다. 15초마다 keep-alive 주석.
 - `MCP-Protocol-Version` 머리글이 모르는 값이면 400.
-- 요청별 키는 `_meta["kr.pes/keys"]` 외에 **`X-Api-Keys: k1,k2`** 머리글도 됩니다(그 요청의 모든 tools/call 에 적용, 기본 키로 안 넘어감). 요청별 도메인도 같은 식으로 **`X-Api-Domain: https://…`** 머리글을 받습니다(`_meta["kr.pes/domain"]` 이 있으면 그것이 우선, 형식이 틀리면 400).
+- 요청별 키는 `_meta["kr.pes/keys"]` 외에 **`X-Api-Keys: k1,k2`** 머리글도 됩니다(그 요청의 모든 tools/call 에 적용, 기본 키로 안 넘어감). 요청별 도메인도 같은 식으로 **`X-Api-Domain: https://…`** 머리글을 받습니다(`_meta["kr.pes/domain"]` 이 있으면 그것이 우선, 형식이 틀리면 400). 머리글로 준 키도 결과에 키별 사용량(`_meta["kr.pes/key-usage"]`)이 붙습니다.
 - 응답·SSE 이벤트 전부 키 스크럽. 접근 기록(stderr)은 메서드·도구 이름·걸린 시간만 남깁니다.
 
 ```bash
