@@ -245,7 +245,17 @@ pub enum Commands {
 /// 최상위 라우터.
 pub async fn run(cli: Cli) -> Result<()> {
     let g = &cli.global;
-    match cli.command {
+    let result = dispatch(g, cli.command).await;
+    // PES 중계가 오류(토큰 · 허용 호스트 · 키 없음)를 줬으면, 배치가 항목별 오류로 삼켰더라도
+    // 그 글을 그대로 보여 주고 실패로 끝낸다.
+    if let Some(e) = crate::relay::recorded_error() {
+        return Err(e.into());
+    }
+    result
+}
+
+async fn dispatch(g: &GlobalArgs, command: Commands) -> Result<()> {
+    match command {
         Commands::Geocode(a) => data_cmds::run_geocode(g, a).await,
         Commands::Geocoder(a) => data_cmds::run_geocoder(g, a).await,
         Commands::Search(a) => data_cmds::run_search(g, a).await,

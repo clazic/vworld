@@ -255,6 +255,9 @@ pub async fn run_map(g: &GlobalArgs, a: MapArgs) -> Result<()> {
         return list_analyses(g);
     }
 
+    // 지도 임베드는 실제 키가 HTML · 스크립트 URL 에 박힌다 — 중계 모드에서는 만들지 않는다.
+    super::data_cmds::reject_key_artifact_in_relay("지도 임베드(`map`)")?;
+
     // 키·도메인은 스크립트 include에 주입.
     let auths = load_auths(g)?;
     let key = &auths[0].key;

@@ -4,6 +4,7 @@ pub mod normalize;
 
 use crate::concurrency::retry::{classify_reqwest, parse_retry_after, RateLimited, RetryPolicy};
 use crate::concurrency::FailKind;
+use crate::relay::{Relay, RelayError};
 use anyhow::{anyhow, Result};
 use std::time::Duration;
 
@@ -213,7 +214,12 @@ pub fn wmts_row_to_tms(z: u32, wmts_row: u32) -> u32 {
 #[derive(Clone)]
 pub struct Client {
     inner: reqwest::Client,
+    /// PES 중계 모드(`vworld` CLI 전용). Some이면 모든 요청이 중계 주소로 나간다.
+    relay: Option<std::sync::Arc<Relay>>,
 }
+
+/// 중계 모드에서 따라갈 넘김(3xx) 횟수 상한(reqwest 기본값과 같음).
+const MAX_RELAY_REDIRECTS: u32 = 10;
 
 /// 호출 시 주입할 인증 컨텍스트.
 #[derive(Debug, Clone, Default)]
@@ -231,7 +237,31 @@ impl Client {
             .connect_timeout(Duration::from_secs(10))
             .user_agent("vworld-cli/0.1")
             .build()?;
-        Ok(Client { inner })
+        Ok(Client { inner, relay: None })
+    }
+
+    /// `vworld` CLI용 클라이언트 — `PES_RELAY_URL` 이 있으면 중계 모드, 없으면 `new()`와 같다.
+    pub fn for_cli() -> Result<Self> {
+        match Relay::from_env() {
+            Some(relay) => Self::with_relay(relay),
+            None => Self::new(),
+        }
+    }
+
+    /// 중계 모드 클라이언트. 모든 요청을 `{중계}/vworld/<scheme>/<host>/<path>?<query>` 로 보낸다.
+    ///
+    /// - 넘김(3xx)은 자동으로 따라가지 않는다 — `Location` 을 다시 중계 주소로 바꿔 요청한다.
+    /// - 중계는 `127.0.0.1` 이라 시스템 프록시를 거치지 않는다.
+    pub fn with_relay(relay: Relay) -> Result<Self> {
+        let inner = reqwest::Client::builder()
+            .pool_max_idle_per_host(8)
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
+            .user_agent("vworld-cli/0.1")
+            .redirect(reqwest::redirect::Policy::none())
+            .no_proxy()
+            .build()?;
+        Ok(Client { inner, relay: Some(std::sync::Arc::new(relay)) })
     }
 
     /// 인증 파라미터(key/domain)를 주입.
@@ -252,14 +282,58 @@ impl Client {
     ) -> Result<reqwest::Response> {
         let policy = RetryPolicy::default();
         let mut attempt = 0u32;
+        // 중계 모드: 주소를 중계 주소로 바꾼다(유일한 길목). 넘김을 받으면 `target` 이 바뀐다.
+        let relay = self.relay.as_deref();
+        let mut target = match relay {
+            Some(r) => r.wrap(url)?,
+            None => url.to_string(),
+        };
+        let mut query: &[(String, String)] = params;
+        let mut redirects = 0u32;
         loop {
-            let mut req = self.inner.get(url).query(params);
+            if relay.is_some() {
+                // 중계 오류를 한 번 받았으면 더 보내지 않는다(다른 키로 다시 해 보지 않는다).
+                if let Some(e) = crate::relay::recorded_error() {
+                    return Err(e.into());
+                }
+            }
+            let mut req = self.inner.get(&target).query(query);
             if let Some(d) = referer {
                 req = req.header(reqwest::header::REFERER, d);
+            }
+            if let Some(r) = relay {
+                req = req.header(crate::relay::TOKEN_HEADER, &r.token);
             }
             match req.send().await {
                 Ok(resp) => {
                     let status = resp.status();
+                    if let Some(r) = relay {
+                        // 중계가 만든 오류(401 · 403 · 409)는 기관 응답이 아니다 — 글 그대로 보여 주고 끝.
+                        if resp.headers().contains_key(crate::relay::ERROR_HEADER) {
+                            let body = resp.text().await.unwrap_or_default();
+                            let text = crate::relay::error_text(status.as_u16(), &body);
+                            crate::relay::record_error(&text);
+                            return Err(RelayError(text).into());
+                        }
+                        // 넘김: 중계는 따라가지 않고 그대로 준다 — `Location` 을 다시 중계 주소로.
+                        if status.is_redirection() {
+                            if let Some(loc) = resp
+                                .headers()
+                                .get(reqwest::header::LOCATION)
+                                .and_then(|v| v.to_str().ok())
+                            {
+                                if redirects >= MAX_RELAY_REDIRECTS {
+                                    return Err(anyhow!("넘김(redirect)이 너무 많습니다(HTTP {status})"));
+                                }
+                                // 현재 주소(질의 포함)를 기준으로 푼다. `Location` 에 질의가 다 들어 있다.
+                                let current = resp.url().to_string();
+                                target = r.wrap_location(&current, loc)?;
+                                query = &[];
+                                redirects += 1;
+                                continue;
+                            }
+                        }
+                    }
                     if status.is_success() {
                         return Ok(resp);
                     }

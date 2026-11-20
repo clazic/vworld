@@ -373,6 +373,10 @@ pub async fn maybe_notify() {
     if NOTIFY_SUPPRESSED.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
+    // PES 중계 모드(브리지가 돌리는 실행)에서는 업데이트 확인 · 알림을 하지 않는다.
+    if crate::relay::Relay::from_env().is_some() {
+        return;
+    }
 
     let Ok(cache) = cache_path() else { return };
 

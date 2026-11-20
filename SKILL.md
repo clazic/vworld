@@ -76,6 +76,7 @@ vworld config path
 
 - 등록된 모든 키가 동시성 키 풀에 자동 편입(`--concurrency`로 병렬 가속).
 - 도메인 등록 키는 `--referer`(또는 config `referer`)로 `domain=` 쿼리·Referer 헤더 주입. CLI는 웹뷰어가 아니므로 도메인 등록 키면 referer 필수일 수 있음.
+- **PES 중계 모드** — 환경 변수 `PES_RELAY_URL` 이 있으면(PES 외부 AI 가 돌릴 때) 설정파일 키를 쓰지 않고 중계로 요청한다. `config add-key` 를 하지 말 것. `PES 에 VWorld 키가 없어요…` 가 나오면 사용자가 PES 「조사 도구 · 그림 키」에 키를 넣어야 한다. 이 모드에서는 `map`(지도 HTML) · `wfs -o`(HTML 뷰어)를 쓸 수 없다(실제 키가 파일에 들어가야 함) — 지도 그림은 `staticmap` · `wms` · `tile` 로 받는다.
 
 ## 자가 업데이트 (update)
 

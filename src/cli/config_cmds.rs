@@ -128,6 +128,26 @@ fn show_path(g: &GlobalArgs) -> Result<()> {
 
 /// 실 VWorld 호출로 각 키 검증 — 지오코딩 1건으로 유효/도메인불일치/오류 판정.
 async fn test_keys(g: &GlobalArgs) -> Result<()> {
+    // PES 중계 모드: 설정파일 키는 쓰지 않는다 — PES 에 등록된 키(자리표시)를 중계로 검증.
+    if let Some(relay) = crate::relay::Relay::from_env() {
+        let auths = super::data_cmds::relay_auths(g, &relay)?;
+        let client = Client::for_cli()?;
+        let mut results = Vec::new();
+        for auth in &auths {
+            let (url, params) = QueryBuilder::new("address", "GetCoord")
+                .format("json")
+                .set("type", "ROAD")
+                .set("address", "서울특별시 중구 세종대로 110")
+                .build();
+            let body = client.get_text(&url, params, auth).await?;
+            let verdict = match normalize::parse_to_json(&body) {
+                Ok(v) => classify(&v, true),
+                Err(e) => format!("응답 파싱 실패: {e}"),
+            };
+            results.push(serde_json::json!({"key": auth.key, "alias": "PES", "verdict": verdict}));
+        }
+        return output::print_json(g, &serde_json::json!({"ok": true, "relay": true, "results": results}));
+    }
     let path = resolve_config_path(g.config.as_deref())?;
     let cfg = Config::load(&path)?;
     if cfg.keys.is_empty() {
@@ -136,7 +156,7 @@ async fn test_keys(g: &GlobalArgs) -> Result<()> {
             &serde_json::json!({"ok": true, "results": [], "note": "등록된 키 없음"}),
         );
     }
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let mut results = Vec::new();
     for entry in &cfg.keys {
         let auth = Auth {

@@ -67,7 +67,7 @@ pub async fn run_staticmap(g: &GlobalArgs, a: StaticMapArgs) -> Result<()> {
         return Err(anyhow!("zoom은 6~18 범위여야 합니다(현재 {})", a.zoom));
     }
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let zoom = a.zoom.to_string();
     let (url, params) = QueryBuilder::new("image", "GetMap")
         .set("center", &a.center)
@@ -114,7 +114,7 @@ pub struct LegendArgs {
 
 pub async fn run_legend(g: &GlobalArgs, a: LegendArgs) -> Result<()> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     // --sld: GetLegendStyle(SLD XML) / 기본: GetLegendGraphic(범례 이미지).
     let request = if a.sld { "GetLegendStyle" } else { "GetLegendGraphic" };
     let (url, params) = QueryBuilder::new("image", request)
@@ -209,7 +209,7 @@ pub async fn run_tile(g: &GlobalArgs, a: TileArgs) -> Result<()> {
     let auths = load_auths(g)?;
     let key = auths[0].key.clone();
     let (kind, url, resolved_ext) = build_tile_url(&a, &key)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let default_name = match kind {
         TileKind::Raster => format!("tile.{resolved_ext}"),
         TileKind::VectorMvt => "tile.mvt".to_string(),

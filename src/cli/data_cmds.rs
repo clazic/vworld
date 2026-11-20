@@ -6,6 +6,7 @@ use crate::api::{parse_passthrough, Auth, Client, NedBuilder, NedKind, QueryBuil
 use crate::config::{resolve_config_path, Config};
 use crate::ned_registry;
 use crate::output;
+use crate::relay::Relay;
 use anyhow::{anyhow, Result};
 use clap::Args;
 use serde_json::Value;
@@ -14,6 +15,10 @@ use serde_json::Value;
 
 /// config에서 키 풀(Auth 목록)을 로드. referer는 --referer > 키별 > 전역.
 pub fn load_auths(g: &GlobalArgs) -> Result<Vec<Auth>> {
+    // PES 중계 모드: 설정파일(`--config` 포함)의 키를 읽지 않고 자리표시 키 풀을 쓴다.
+    if let Some(relay) = Relay::from_env() {
+        return relay_auths(g, &relay);
+    }
     let path = resolve_config_path(g.config.as_deref())?;
     let cfg = Config::load(&path)?;
     if cfg.keys.is_empty() {
@@ -29,6 +34,35 @@ pub fn load_auths(g: &GlobalArgs) -> Result<Vec<Auth>> {
             domain: g.referer.clone().or_else(|| cfg.referer_for(e)),
         })
         .collect())
+}
+
+/// 중계 모드 키 풀 — `__PES_KEY_i__` n개. 도메인은 `--referer`(명시) > `__PES_DOMAIN__`.
+///
+/// 키 수가 0 이거나 변수가 없으면 기관을 부르지 않고 규약 문구로 끝낸다.
+pub fn relay_auths(g: &GlobalArgs, relay: &Relay) -> Result<Vec<Auth>> {
+    if relay.n_keys == 0 {
+        return Err(anyhow!(crate::relay::NO_KEYS_MESSAGE));
+    }
+    let domain = g
+        .referer
+        .clone()
+        .unwrap_or_else(|| crate::relay::DOMAIN_PLACEHOLDER.to_string());
+    Ok(relay
+        .placeholder_keys()
+        .into_iter()
+        .map(|key| Auth { key, domain: Some(domain.clone()) })
+        .collect())
+}
+
+/// 실제 키가 박힌 산출물(지도 HTML · 스크립트 URL)을 만드는 명령은 중계 모드에서 쓸 수 없다.
+/// 자리표시가 들어간 파일은 브라우저에서 동작하지 않으므로, 만들지 않고 알린다.
+pub fn reject_key_artifact_in_relay(what: &str) -> Result<()> {
+    if Relay::from_env().is_some() {
+        return Err(anyhow!(
+            "PES 중계 모드에서는 {what} 을(를) 만들 수 없어요. 결과 파일에 실제 VWorld 키가 들어가야 하는데, 중계 모드의 CLI 는 키를 받지 않습니다."
+        ));
+    }
+    Ok(())
 }
 
 /// 단건 데이터 요청: 호출 → (raw면 원문, 아니면 정규화 JSON) 출력.
@@ -96,7 +130,7 @@ pub struct GeocodeArgs {
 
 pub async fn run_geocode(g: &GlobalArgs, a: GeocodeArgs) -> Result<()> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let crs = a.crs.clone();
     let auto = a.r#type.eq_ignore_ascii_case("auto");
 
@@ -203,7 +237,7 @@ pub struct GeocoderArgs {
 pub async fn run_geocoder(g: &GlobalArgs, a: GeocoderArgs) -> Result<()> {
     let auths = load_auths(g)?;
     let key = pick_auth(&auths).key.clone();
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
 
     // 좌표 확보: 입력이 "x,y"면 그대로, 아니면 주소→좌표(지번→도로명 순).
     let (x, y) = if looks_like_coord(&a.query) {
@@ -312,7 +346,7 @@ fn geocode_has_result(v: &Value, reverse: bool) -> bool {
 /// crs: 응답 좌표계 (예: "EPSG:4326", "EPSG:5187"). 3D 분석 지도 중심 이동 등 내부 재사용용.
 pub async fn geocode_point(g: &GlobalArgs, address: &str, crs: &str) -> Result<(String, String)> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let auth = pick_auth(&auths);
     // 도로명 → 지번 순으로 시도(둘 중 먼저 좌표가 잡히는 것을 사용).
     for ty in ["ROAD", "PARCEL"] {
@@ -380,7 +414,7 @@ pub struct SearchArgs {
 
 pub async fn run_search(g: &GlobalArgs, a: SearchArgs) -> Result<()> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let size = a.size.map(|s| s.to_string());
     let page = a.page.map(|p| p.to_string());
     let (url, params) = QueryBuilder::new("search", "search")
@@ -855,7 +889,7 @@ pub async fn run_data(g: &GlobalArgs, a: DataArgs) -> Result<()> {
         ));
     }
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let size = a.size.map(|s| s.to_string());
     let page = a.page.map(|p| p.to_string());
     let (url, params) = QueryBuilder::new("data", "GetFeature")
@@ -1167,7 +1201,7 @@ pub async fn run_ned(g: &GlobalArgs, a: NedArgs) -> Result<()> {
     }
 
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
 
     let kind = match op.kind {
         "wms" => NedKind::Wms,
@@ -1874,7 +1908,10 @@ async fn resilient_get_text(
             Ok(b) => return Ok(b),
             Err(e) => {
                 // 429 소진은 같은 키로 더 두드리지 않고 즉시 반환 → 워커가 키 쿨다운을 건다.
-                if e.downcast_ref::<crate::concurrency::retry::RateLimited>().is_some() {
+                // PES 중계 오류도 다시 해 보지 않는다(규약).
+                if e.downcast_ref::<crate::concurrency::retry::RateLimited>().is_some()
+                    || e.downcast_ref::<crate::relay::RelayError>().is_some()
+                {
                     return Err(e);
                 }
                 last = Some(e);
@@ -2319,7 +2356,7 @@ pub struct WmsArgs {
 
 pub async fn run_wms(g: &GlobalArgs, a: WmsArgs) -> Result<()> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let width = a.width.map(|w| w.to_string());
     let height = a.height.map(|h| h.to_string());
     let is_getmap = a.request.eq_ignore_ascii_case("GetMap");
@@ -2395,8 +2432,12 @@ pub struct WfsArgs {
 }
 
 pub async fn run_wfs(g: &GlobalArgs, a: WfsArgs) -> Result<()> {
+    // `-o` HTML 뷰어는 배경 타일 주소에 키가 박힌다 — 중계 모드에서는 만들지 않는다.
+    if a.output.is_some() {
+        reject_key_artifact_in_relay("WFS HTML 뷰어(`wfs -o`)")?;
+    }
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let maxf = a.max_features.map(|m| m.to_string());
     // WFS는 OGC 표준: version=1.1.0 + outputFormat(JSON) + srsName(좌표계) 필수.
     // typename은 소문자여야 매칭됨. (version 2.0/crs/output 조합은 빈 결과를 냄)
@@ -2461,7 +2502,7 @@ pub struct CatalogArgs {
 
 pub async fn run_catalog(g: &GlobalArgs, a: CatalogArgs) -> Result<()> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let op_path = match a.op.as_str() {
         "datasets" => "dtmk/getDatasetList.do",
         "gids" => "dtmk/getGidList.do",
@@ -2514,7 +2555,7 @@ pub struct BatchArgs {
 
 pub async fn run_batch(g: &GlobalArgs, a: BatchArgs) -> Result<()> {
     let auths = load_auths(g)?;
-    let client = Client::new()?;
+    let client = Client::for_cli()?;
     let lines = read_lines(&a.from)?;
     match a.command.as_str() {
         "geocode" | "geo" => {

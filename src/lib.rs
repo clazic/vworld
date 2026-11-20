@@ -14,6 +14,7 @@ pub mod mcp;
 pub mod mcp_results;
 pub mod ned_registry;
 pub mod output;
+pub mod relay;
 pub mod shp;
 pub mod twod_registry;
 pub mod update;

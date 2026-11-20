@@ -166,6 +166,23 @@ vworld config path             # config.toml 위치 확인
 | Windows | `%USERPROFILE%\.vworld\config.toml` |
 
 `--config <경로>`로 다른 파일을 지정할 수도 있습니다(지정 시 해당 파일이 없으면 에러).
+### PES 중계 모드 (키 없이 실행)
+
+PES 의 외부 AI(pes-bridge)가 `vworld` 를 돌릴 때는 CLI 가 키를 받지 않습니다. 브리지가 아래 환경 변수를 주면 **중계 모드**가 되고, 없으면 지금까지와 똑같이 동작합니다.
+
+| 환경 변수 | 뜻 |
+|---|---|
+| `PES_RELAY_URL` | 중계 주소(예 `http://127.0.0.1:53999`). 있으면 중계 모드 |
+| `PES_RELAY_TOKEN` | 이번 실행 토큰 — 모든 요청에 `X-PES-Relay-Token` 머리글로 붙습니다 |
+| `PES_RELAY_VWORLD_KEYS` | PES 에 등록된 VWorld 키 수 |
+
+- `~/.vworld/config.toml`(`--config` 포함)의 키 · referer 는 **읽지 않습니다.** 키 풀은 자리표시 `__PES_KEY_0__` … 이고(병렬 · 돌려 쓰기는 그대로), `domain=` · Referer 는 `__PES_DOMAIN__` 입니다. 실제 값은 중계가 끼웁니다. 명령줄에 `--referer` 를 직접 주면 그 값이 우선합니다.
+- VWorld 로 가는 모든 요청은 `{PES_RELAY_URL}/vworld/<scheme>/<host>/<path>?<query>` 로 나갑니다. 넘김(3xx)의 `Location` 도 다시 중계 주소로 바꿔 요청합니다.
+- 키 수가 0 이거나 변수가 없으면 `PES 에 VWorld 키가 없어요. PES 「조사 도구 · 그림 키」에서 키를 넣으세요.` 를 알리고 끝납니다(호출 없음).
+- 중계가 준 오류(`X-PES-Relay-Error: 1`)는 그 글을 그대로 보여 주고 끝납니다 — 다른 키로 다시 해 보지 않습니다.
+- 결과 파일에 실제 키가 들어가야 하는 명령은 쓸 수 없습니다: `map`(모든 종류 · `--analysis <이름>`), `wfs -o`(HTML 뷰어). `map --analysis list` 와 오프라인 명령(`config` · `update` · `hjd-db` · `data layers|describe|join` · `ned --list`)은 그대로 됩니다.
+- 업데이트 확인 알림은 뜨지 않습니다(`vworld update` 는 GitHub 로 직접 갑니다 — 중계 대상 아님).
+- `vworld-mcp` 는 중계 모드를 쓰지 않습니다(요청별 키를 직접 받습니다).
 
 ---
 
